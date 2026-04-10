@@ -35,13 +35,5 @@ export interface GameState {
   winner: PlayerId | null;
   lastMove: Move | null;
   enPassantTarget: { row: number; col: number } | null;
-}
-
-export interface FormattedLastMove {
-  piece: string;
-  fromRow: number;
-  fromCol: number;
-  toRow: number;
-  toCol: number;
-  capturedPiece?: string;
+  capturedPieces: { [key in PlayerId]?: Piece[] };
 }

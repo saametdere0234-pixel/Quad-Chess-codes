@@ -4,36 +4,75 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { BrainCircuit, Crown, Swords, RefreshCw } from 'lucide-react';
-import type { Player } from '@/lib/game/types';
-import { Skeleton } from '../ui/skeleton';
+import { Crown, Swords, RefreshCw, Undo2, Redo2, Box } from 'lucide-react';
+import type { Player, Piece, PlayerId } from '@/lib/game/types';
+import { PIECE_EMOJIS, PLAYERS } from '@/lib/game/constants';
+import { cn } from '@/lib/utils';
+
 
 interface GameInfoPanelProps {
   currentPlayer: Player;
   eliminatedPlayers: Player[];
   winner: Player | null;
-  aiCommentary: string;
-  isAIThinking: boolean;
   onRestart: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
+  capturedPieces: { [key in PlayerId]?: Piece[] };
+  players: Player[];
+}
+
+const CapturedPiece = ({ piece }: { piece: Piece }) => {
+    const player = PLAYERS.find(p => p.id === piece.player);
+    if (!player) return null;
+
+    return (
+        <span
+          className="text-xl"
+          title={`${player.name} ${piece.type}`}
+          style={{
+            color: player.color,
+            filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.4))'
+          }}
+        >
+            {PIECE_EMOJIS[piece.player][piece.type]}
+        </span>
+    )
 }
 
 export default function GameInfoPanel({
   currentPlayer,
   eliminatedPlayers,
   winner,
-  aiCommentary,
-  isAIThinking,
   onRestart,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
+  capturedPieces,
+  players
 }: GameInfoPanelProps) {
+
+  const activePlayers = players.filter(p => !eliminatedPlayers.find(ep => ep.id === p.id));
+
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Game Status</span>
-            <Button variant="ghost" size="icon" onClick={onRestart} aria-label="Restart Game">
-                <RefreshCw className="h-5 w-5" />
-            </Button>
+            <span>Game Controls</span>
+            <div className='flex items-center space-x-1'>
+                <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo move">
+                    <Undo2 className="h-5 w-5" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo move">
+                    <Redo2 className="h-5 w-5" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onRestart} aria-label="Restart Game">
+                    <RefreshCw className="h-5 w-5" />
+                </Button>
+            </div>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -83,21 +122,35 @@ export default function GameInfoPanel({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
-            <BrainCircuit className="h-5 w-5 mr-2" />
-            AI Commentary
+            <Box className="h-5 w-5 mr-2" />
+            Captured Pieces
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-24">
-            {isAIThinking ? (
-                <div className="space-y-2">
-                    <Skeleton className="h-4 w-[80%]" />
-                    <Skeleton className="h-4 w-[60%]" />
+            <ScrollArea className="h-48">
+                <div className='space-y-3'>
+                {activePlayers.map(player => (
+                    <div key={player.id}>
+                        <div className="flex items-center space-x-2 mb-1">
+                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: player.color }}/>
+                            <p className="text-xs font-semibold">{player.name}</p>
+                        </div>
+                        <div className={cn(
+                            "flex flex-wrap gap-1 p-2 rounded-md min-h-[36px]",
+                            (capturedPieces[player.id]?.length ?? 0) > 0 ? 'bg-muted/50' : 'bg-transparent'
+                        )}>
+                            {capturedPieces[player.id] && capturedPieces[player.id]!.length > 0 ? (
+                                capturedPieces[player.id]!.map((piece, index) => (
+                                    <CapturedPiece key={index} piece={piece} />
+                                ))
+                            ) : (
+                                <p className="text-xs text-muted-foreground italic">No pieces captured yet.</p>
+                            )}
+                        </div>
+                    </div>
+                ))}
                 </div>
-            ) : (
-                <p className="text-sm text-muted-foreground italic">"{aiCommentary}"</p>
-            )}
-          </ScrollArea>
+            </ScrollArea>
         </CardContent>
       </Card>
     </div>

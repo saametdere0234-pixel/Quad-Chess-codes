@@ -4,9 +4,8 @@ import { useState, useMemo, useEffect } from 'react';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
 import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
-import type { GameState, Move, Square, FormattedLastMove, PlayerId, Board } from '@/lib/game/types';
+import type { GameState, Move, Square, PlayerId, Board, Piece } from '@/lib/game/types';
 import { PLAYERS, PIECE_EMOJIS, BOARD_SIZE } from '@/lib/game/constants';
-import { fetchAICommentary } from '@/app/actions';
 import { useToast } from "@/hooks/use-toast"
 import { produce } from 'immer';
 
@@ -18,6 +17,7 @@ const initialGameState: GameState = {
   winner: null,
   lastMove: null,
   enPassantTarget: null,
+  capturedPieces: {},
 };
 
 function getRotatedBoard(board: Board, playerId: PlayerId): Board {
@@ -35,11 +35,11 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   switch (playerId) {
     case 'Red':
       return newBoard; 
-    case 'Yellow':
+    case 'Green':
       return rotate90(newBoard);
     case 'Blue':
       return rotate180(newBoard);
-    case 'Green':
+    case 'Yellow':
       return rotate270(newBoard);
     default:
       return newBoard;
@@ -50,11 +50,11 @@ function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: n
   switch (playerId) {
     case 'Red': // 0
       return { row, col };
-    case 'Yellow': // 90
+    case 'Green': // 90
       return { row: size - 1 - col, col: row };
     case 'Blue': // 180
       return { row: size - 1 - row, col: size - 1 - col };
-    case 'Green': // 270
+    case 'Yellow': // 270
       return { row: col, col: size - 1 - row };
     default:
       return { row, col };
@@ -66,11 +66,11 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
     switch (playerId) {
         case 'Red': // 0
             return { row, col };
-        case 'Yellow': // 90
+        case 'Green': // 90
             return { row: col, col: size - 1 - row };
         case 'Blue': // 180
             return { row: size - 1 - row, col: size - 1 - col };
-        case 'Green': // 270
+        case 'Yellow': // 270
             return { row: size - 1 - col, col: row };
         default:
             return { row, col };
@@ -79,13 +79,14 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
 
 
 export default function Game() {
-  const [gameState, setGameState] = useState<GameState>(initialGameState);
+  const [history, setHistory] = useState<GameState[]>([initialGameState]);
+  const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
+  const gameState = history[currentMoveIndex];
+  
   const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
-  const [aiCommentary, setAiCommentary] = useState<string>('The game is about to begin. Good luck!');
-  const [isAIThinking, setIsAIThinking] = useState<boolean>(false);
   const { toast } = useToast();
 
-  const { board, currentPlayerIndex, players, eliminatedPlayerIds, winner, lastMove, enPassantTarget } = gameState;
+  const { board, currentPlayerIndex, players, eliminatedPlayerIds, winner, lastMove, enPassantTarget, capturedPieces } = gameState;
   const currentPlayer = useMemo(() => players[currentPlayerIndex], [players, currentPlayerIndex]);
 
   const validMoves = useMemo(() => {
@@ -101,6 +102,11 @@ export default function Game() {
         })
     }
   }, [winner, players, toast]);
+  
+  // Reset selected square if the current player changes (e.g. on undo/redo)
+  useEffect(() => {
+    setSelectedSquare(null);
+  }, [currentPlayerIndex, currentMoveIndex]);
 
   const displayBoard = useMemo(() => getRotatedBoard(board, currentPlayer.id), [board, currentPlayer.id]);
   const displaySelectedSquare = useMemo(() => {
@@ -118,7 +124,7 @@ export default function Game() {
       }
   }, [lastMove, currentPlayer.id]);
 
-  const handleSquareClick = async (row: number, col: number) => {
+  const handleSquareClick = (row: number, col: number) => {
     const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, currentPlayer.id, BOARD_SIZE);
     
     if (winner) return;
@@ -128,7 +134,7 @@ export default function Game() {
       const isValidMove = validMoves.some(move => move.row === originalRow && move.col === originalCol);
 
       if (isValidMove) {
-        await makeMove(selectedSquare, { row: originalRow, col: originalCol });
+        makeMove(selectedSquare, { row: originalRow, col: originalCol });
       } else {
         setSelectedSquare(
           clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id
@@ -141,11 +147,11 @@ export default function Game() {
     }
   };
 
-  const makeMove = async (from: { row: number, col: number }, to: { row: number, col: number }) => {
+  const makeMove = (from: { row: number, col: number }, to: { row: number, col: number }) => {
     const fromPiece = board[from.row][from.col].piece;
     if (!fromPiece) return;
 
-    let capturedPiece = board[to.row][to.col].piece;
+    let capturedPiece: Piece | null = board[to.row][to.col].piece;
     const move: Move = { from, to };
 
     const isEnPassant = fromPiece.type === 'Pawn' && !!enPassantTarget && to.row === enPassantTarget.row && to.col === enPassantTarget.col;
@@ -162,20 +168,19 @@ export default function Game() {
         }
     }
 
-    const formattedLastMove: FormattedLastMove = {
-        piece: PIECE_EMOJIS[fromPiece.player][fromPiece.type],
-        fromRow: from.row,
-        fromCol: from.col,
-        toRow: to.row,
-        toCol: to.col,
-        capturedPiece: capturedPiece ? PIECE_EMOJIS[capturedPiece.player][capturedPiece.type] : undefined,
-    };
-
     const nextState = produce(gameState, draft => {
         const movingPiece = { ...draft.board[from.row][from.col].piece!, hasMoved: true };
         draft.board[to.row][to.col].piece = movingPiece;
         draft.board[from.row][from.col].piece = null;
         draft.lastMove = move;
+
+        if (capturedPiece) {
+            const capturingPlayerId = fromPiece.player;
+            if (!draft.capturedPieces[capturingPlayerId]) {
+                draft.capturedPieces[capturingPlayerId] = [];
+            }
+            draft.capturedPieces[capturingPlayerId]!.push(capturedPiece);
+        }
 
         if (fromPiece.type === 'Pawn' && (Math.abs(from.row - to.row) === 2 || Math.abs(from.col - to.col) === 2)) {
             draft.enPassantTarget = { row: (from.row + to.row) / 2, col: (from.col + to.col) / 2 };
@@ -248,26 +253,24 @@ export default function Game() {
         }
     });
 
-    setGameState(nextState);
+    const newHistory = history.slice(0, currentMoveIndex + 1);
+    setHistory([...newHistory, nextState]);
+    setCurrentMoveIndex(newHistory.length);
     setSelectedSquare(null);
-    setAiCommentary('');
-    setIsAIThinking(true);
-
-    const commentary = await fetchAICommentary({
-        boardState: nextState.board.map(r => r.map(s => s.piece ? PIECE_EMOJIS[s.piece.player][s.piece.type] : '')),
-        lastMove: formattedLastMove,
-        currentPlayerId: currentPlayer.name
-    });
-
-    setAiCommentary(commentary);
-    setIsAIThinking(false);
   };
   
   const onRestart = () => {
-    setGameState(initialGameState);
+    setHistory([initialGameState]);
+    setCurrentMoveIndex(0);
     setSelectedSquare(null);
-    setAiCommentary('The game is about to begin. Good luck!');
-    setIsAIThinking(false);
+  }
+
+  const handleUndo = () => {
+    setCurrentMoveIndex(prev => Math.max(0, prev - 1));
+  }
+  
+  const handleRedo = () => {
+    setCurrentMoveIndex(prev => Math.min(history.length - 1, prev + 1));
   }
 
   return (
@@ -288,9 +291,13 @@ export default function Game() {
           currentPlayer={currentPlayer}
           eliminatedPlayers={eliminatedPlayerIds.map(id => players.find(p => p.id === id)!)}
           winner={winner ? players.find(p => p.id === winner)! : null}
-          aiCommentary={aiCommentary}
-          isAIThinking={isAIThinking}
           onRestart={onRestart}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={currentMoveIndex > 0}
+          canRedo={currentMoveIndex < history.length - 1}
+          capturedPieces={capturedPieces}
+          players={players}
         />
       </div>
     </div>
