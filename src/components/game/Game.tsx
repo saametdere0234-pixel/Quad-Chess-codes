@@ -43,12 +43,12 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   switch (playerId) {
     case 'Red':
       return newBoard; 
-    case 'Yellow': // Swapped with Green for new turn order
-      return rotate90(newBoard);
+    case 'Yellow':
+      return rotate270(newBoard);
     case 'Blue':
       return rotate180(newBoard);
-    case 'Green': // Swapped with Yellow for new turn order
-      return rotate270(newBoard);
+    case 'Green':
+      return rotate90(newBoard);
     default:
       return newBoard;
   }
@@ -58,12 +58,12 @@ function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: n
   switch (playerId) {
     case 'Red':
       return { row, col };
-    case 'Yellow': // Swapped
-      return { row: size - 1 - col, col: row };
+    case 'Yellow':
+      return { row: col, col: size - 1 - row };
     case 'Blue':
       return { row: size - 1 - row, col: size - 1 - col };
-    case 'Green': // Swapped
-      return { row: col, col: size - 1 - row };
+    case 'Green':
+      return { row: size - 1 - col, col: row };
     default:
       return { row, col };
   }
@@ -74,12 +74,12 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
     switch (playerId) {
         case 'Red':
             return { row, col };
-        case 'Yellow': // Swapped
-            return { row: col, col: size - 1 - row };
+        case 'Yellow':
+            return { row: size - 1 - col, col: row };
         case 'Blue':
             return { row: size - 1 - row, col: size - 1 - col };
-        case 'Green': // Swapped
-            return { row: size - 1 - col, col: row };
+        case 'Green':
+            return { row: col, col: size - 1 - row };
         default:
             return { row, col };
     }
@@ -176,8 +176,8 @@ export default function Game() {
             let capturedPawnPos: { row: number, col: number } | null = null;
             if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
             else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
-            else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
             else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col + 1 };
+            else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
             if (capturedPawnPos && draft.board[capturedPawnPos.row]?.[capturedPawnPos.col]?.piece) {
                 capturedPiece = draft.board[capturedPawnPos.row][capturedPawnPos.col].piece;
             }
@@ -205,8 +205,8 @@ export default function Game() {
           let capturedPawnPos: { row: number, col: number } | null = null;
           if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
           else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
-          else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
           else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col + 1 };
+          else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
           if(capturedPawnPos) {
             draft.board[capturedPawnPos.row][capturedPawnPos.col].piece = null;
           }

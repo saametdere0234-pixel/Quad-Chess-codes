@@ -26,8 +26,8 @@ export const createInitialBoard = (): Board => {
 
   const placePlayerPieces = (player: PlayerId) => {
     const isBlue = player === 'Blue';
-    const isYellow = player === 'Yellow';
-    const setupOrder = (isBlue || isYellow) ? ROTATED_PIECE_SETUP_ORDER : PIECE_SETUP_ORDER;
+    const isGreen = player === 'Green';
+    const setupOrder = (isBlue || isGreen) ? ROTATED_PIECE_SETUP_ORDER : PIECE_SETUP_ORDER;
 
     for (let i = 0; i < 8; i++) {
       const pawn: Piece = { type: 'Pawn', player, hasMoved: false };
@@ -39,10 +39,10 @@ export const createInitialBoard = (): Board => {
       } else if (player === 'Blue') { // Top
         board[1][i + 3].piece = pawn;
         board[0][i + 3].piece = piece;
-      } else if (player === 'Yellow') { // Right (swapped from original)
+      } else if (player === 'Green') { // Right 
         board[i + 3][12].piece = pawn;
         board[i + 3][13].piece = piece;
-      } else if (player === 'Green') { // Left (swapped from original)
+      } else if (player === 'Yellow') { // Left
         board[i + 3][1].piece = pawn;
         board[i + 3][0].piece = piece;
       }
@@ -51,8 +51,8 @@ export const createInitialBoard = (): Board => {
 
   placePlayerPieces('Red');
   placePlayerPieces('Blue');
-  placePlayerPieces('Yellow');
   placePlayerPieces('Green');
+  placePlayerPieces('Yellow');
 
   return board;
 };
@@ -102,8 +102,8 @@ export const getValidMoves = (row: number, col: number, gameState: GameState): {
 
       if (player === 'Red') { forwardDir = { r: -1, c: 0 }; captureDirs = [{ r: -1, c: -1 }, { r: -1, c: 1 }]; }
       if (player === 'Blue') { forwardDir = { r: 1, c: 0 }; captureDirs = [{ r: 1, c: -1 }, { r: 1, c: 1 }]; }
-      if (player === 'Green') { forwardDir = { r: 0, c: 1 }; captureDirs = [{ r: -1, c: 1 }, { r: 1, c: 1 }]; }
-      if (player === 'Yellow') { forwardDir = { r: 0, c: -1 }; captureDirs = [{ r: -1, c: -1 }, { r: 1, c: -1 }]; }
+      if (player === 'Yellow') { forwardDir = { r: 0, c: 1 }; captureDirs = [{ r: -1, c: 1 }, { r: 1, c: 1 }]; }
+      if (player === 'Green') { forwardDir = { r: 0, c: -1 }; captureDirs = [{ r: -1, c: -1 }, { r: 1, c: -1 }]; }
 
       // One step forward
       const oneStep = { row: row + forwardDir.r, col: col + forwardDir.c };
@@ -177,15 +177,15 @@ export const getValidMoves = (row: number, col: number, gameState: GameState): {
             // Queenside (to col 4)
             if (board[0][3].piece?.type === 'Rook' && !board[0][3].piece.hasMoved && !board[0][4].piece && !board[0][5].piece) moves.push({ row: 0, col: 4 });
         }
-        // Green (left) - now at col 0
-        if (player === 'Green' && row === 6 && col === 0) {
+        // Yellow (left)
+        if (player === 'Yellow' && row === 6 && col === 0) {
             // "Kingside" (down to row 8)
             if (board[10][0].piece?.type === 'Rook' && !board[10][0].piece.hasMoved && !board[7][0].piece && !board[8][0].piece && !board[9][0].piece) moves.push({ row: 8, col: 0 });
             // "Queenside" (up to row 4)
             if (board[3][0].piece?.type === 'Rook' && !board[3][0].piece.hasMoved && !board[4][0].piece && !board[5][0].piece) moves.push({ row: 4, col: 0 });
         }
-        // Yellow (right) - now at col 13
-        if (player === 'Yellow' && row === 7 && col === 13) {
+        // Green (right)
+        if (player === 'Green' && row === 7 && col === 13) {
             // "Kingside" (up to row 5)
             if (board[3][13].piece?.type === 'Rook' && !board[3][13].piece.hasMoved && !board[4][13].piece && !board[5][13].piece && !board[6][13].piece) moves.push({ row: 5, col: 13 });
             // "Queenside" (down to row 9)

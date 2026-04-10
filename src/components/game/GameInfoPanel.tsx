@@ -27,9 +27,11 @@ const CapturedPiece = ({ piece }: { piece: Piece }) => {
         <span
           className="text-xl"
           title={`${player.name} ${piece.type}`}
-          style={{
-             filter: `drop-shadow(0 0 2px ${player.color}) drop-shadow(0 1px 1px rgba(0,0,0,0.5))`
-          }}
+           style={{
+                color: player.color,
+                WebkitTextStroke: '1px black',
+                paintOrder: 'stroke fill',
+            }}
         >
             {PIECE_EMOJIS[piece.player][piece.type]}
         </span>
