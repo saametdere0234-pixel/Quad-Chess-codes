@@ -1,10 +1,9 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { ReactNode, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
 
 const PROTECTED_ROUTES = ['/', '/game'];
 const PUBLIC_ROUTES = ['/login', '/create-profile'];

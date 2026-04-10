@@ -2,11 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useAuth } from '@/firebase';
+import { useAuth, useFirestore } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { doc, getDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase';
 
 export default function Login() {
   const auth = useAuth();
