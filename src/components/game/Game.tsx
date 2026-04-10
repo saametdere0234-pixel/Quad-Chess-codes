@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { produce } from 'immer';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
@@ -94,30 +94,35 @@ export default function Game() {
   const currentPlayer = useMemo(() => players[currentPlayerIndex], [players, currentPlayerIndex]);
   const currentUserPlayerId = currentPlayer.id;
 
+  const prevEliminatedPlayerIdsRef = useRef<PlayerId[]>(eliminatedPlayerIds);
+
   useEffect(() => {
     if (winner) {
         toast({
             title: "Game Over!",
             description: `${players.find(p => p.id === winner)?.name} is victorious!`,
         })
-    } else {
-        const prevGameState = history[historyIndex - 1];
-        if (prevGameState) {
-            const newlyEliminated = eliminatedPlayerIds.filter(id => !prevGameState.eliminatedPlayerIds.includes(id));
-            if (newlyEliminated.length > 0) {
-                const newlyEliminatedId = newlyEliminated[0];
-                const playerName = players.find(p => p.id === newlyEliminatedId)?.name;
-                if(playerName) {
-                    toast({
-                      title: "Player Eliminated!",
-                      description: `${playerName} has been eliminated.`,
-                      variant: "destructive",
-                    });
-                }
-            }
+    }
+  }, [winner, players, toast]);
+
+  useEffect(() => {
+    const prevEliminated = prevEliminatedPlayerIdsRef.current;
+    const newlyEliminated = eliminatedPlayerIds.filter(id => !prevEliminated.includes(id));
+    
+    if (newlyEliminated.length > 0) {
+        const newlyEliminatedId = newlyEliminated[0];
+        const playerName = players.find(p => p.id === newlyEliminatedId)?.name;
+        if(playerName) {
+            toast({
+              title: "Player Eliminated!",
+              description: `${playerName} has been eliminated.`,
+              variant: "destructive",
+            });
         }
     }
-  }, [winner, eliminatedPlayerIds, players, toast, history, historyIndex]);
+
+    prevEliminatedPlayerIdsRef.current = eliminatedPlayerIds;
+  }, [eliminatedPlayerIds, players, toast]);
   
   useEffect(() => {
     setSelectedSquare(null);
@@ -155,15 +160,16 @@ export default function Game() {
         let capturedPiece: Piece | null = draft.board[to.row][to.col].piece;
         const move: Move = { from, to };
         const isEnPassant = fromPiece.type === 'Pawn' && !!draft.enPassantTarget && to.row === draft.enPassantTarget.row && to.col === draft.enPassantTarget.col;
+        let enPassantCapturePos: { row: number, col: number } | null = null;
         
         if (isEnPassant) {
-            let capturedPawnPos: { row: number, col: number } | null = null;
-            if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
-            else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
-            else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col + 1 };
-            else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
-            if (capturedPawnPos && draft.board[capturedPawnPos.row]?.[capturedPawnPos.col]?.piece) {
-                capturedPiece = draft.board[capturedPawnPos.row][capturedPawnPos.col].piece;
+            if (fromPiece.player === 'Red') enPassantCapturePos = { row: to.row + 1, col: to.col };
+            else if (fromPiece.player === 'Blue') enPassantCapturePos = { row: to.row - 1, col: to.col };
+            else if (fromPiece.player === 'Green') enPassantCapturePos = { row: to.row, col: to.col + 1 };
+            else if (fromPiece.player === 'Yellow') enPassantCapturePos = { row: to.row, col: to.col - 1 };
+            
+            if (enPassantCapturePos) {
+                capturedPiece = draft.board[enPassantCapturePos.row][enPassantCapturePos.col].piece;
             }
         }
         
@@ -189,16 +195,11 @@ export default function Game() {
         } else {
             draft.enPassantTarget = null;
         }
-        if (isEnPassant) {
-          let capturedPawnPos: { row: number, col: number } | null = null;
-          if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
-          else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
-          else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col + 1 };
-          else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
-          if(capturedPawnPos) {
-            draft.board[capturedPawnPos.row][capturedPawnPos.col].piece = null;
-          }
+
+        if (isEnPassant && enPassantCapturePos) {
+            draft.board[enPassantCapturePos.row][enPassantCapturePos.col].piece = null;
         }
+
         if (fromPiece.type === 'King' && (Math.abs(from.col - to.col) === 2 || Math.abs(from.row - to.row) === 2)) {
           if (Math.abs(from.col - to.col) === 2) { // Horizontal castling
               const rookFromCol = to.col > from.col ? 10 : 3;
@@ -264,11 +265,17 @@ export default function Game() {
     const isMoveValid = validMovesForPiece.some(move => move.row === to.row && move.col === to.col);
 
     if (isMoveValid) {
+      // Pawn promotion ranks are the back ranks of the other three players
+      const promotionRanks: {[key in PlayerId]: {rows: number[], cols: number[]}} = {
+        Red: { rows: [0], cols: [0, 13] },
+        Blue: { rows: [13], cols: [0, 13] },
+        Yellow: { rows: [0, 13], cols: [13] },
+        Green: { rows: [0, 13], cols: [0] },
+      };
+
       const isPromotion = fromPiece.type === 'Pawn' && (
-          (fromPiece.player === 'Red' && to.row === 0) ||
-          (fromPiece.player === 'Blue' && to.row === 13) ||
-          (fromPiece.player === 'Yellow' && to.col === 13) ||
-          (fromPiece.player === 'Green' && to.col === 0)
+        promotionRanks[fromPiece.player].rows.includes(to.row) ||
+        promotionRanks[fromPiece.player].cols.includes(to.col)
       );
 
       if (isPromotion) {
