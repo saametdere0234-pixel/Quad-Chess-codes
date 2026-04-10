@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { produce } from 'immer';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
@@ -8,14 +8,6 @@ import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board } from '@/lib/game/types';
 import { BOARD_SIZE, PLAYERS } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast";
-
-function usePrevious<T>(value: T) {
-  const ref = useRef<T>();
-  useEffect(() => {
-    ref.current = value;
-  });
-  return ref.current;
-}
 
 const createNewGameState = (): GameState => ({
   board: createInitialBoard(),
@@ -87,7 +79,10 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
 
 
 export default function Game() {
-  const [gameState, setGameState] = useState<GameState>(createNewGameState());
+  const [history, setHistory] = useState<GameState[]>([createNewGameState()]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const gameState = history[historyIndex];
+
   const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
   const { toast } = useToast();
 
@@ -95,29 +90,34 @@ export default function Game() {
   const currentPlayer = useMemo(() => players[currentPlayerIndex], [players, currentPlayerIndex]);
   const currentUserPlayerId = currentPlayer.id;
 
-  const prevEliminatedPlayerIds = usePrevious(eliminatedPlayerIds);
-
   useEffect(() => {
     if (winner) {
         toast({
             title: "Game Over!",
             description: `${players.find(p => p.id === winner)?.name} is victorious!`,
         })
-    } else if (prevEliminatedPlayerIds && eliminatedPlayerIds.length > prevEliminatedPlayerIds.length) {
-      const newlyEliminatedId = eliminatedPlayerIds.find(id => !prevEliminatedPlayerIds.includes(id));
-      if (newlyEliminatedId) {
-        toast({
-          title: "Player Eliminated!",
-          description: `${players.find(p => p.id === newlyEliminatedId)?.name} has been eliminated.`,
-          variant: "destructive",
-        });
-      }
+    } else {
+        const prevGameState = history[historyIndex - 1];
+        if (prevGameState) {
+            const newlyEliminated = eliminatedPlayerIds.filter(id => !prevGameState.eliminatedPlayerIds.includes(id));
+            if (newlyEliminated.length > 0) {
+                const newlyEliminatedId = newlyEliminated[0];
+                const playerName = players.find(p => p.id === newlyEliminatedId)?.name;
+                if(playerName) {
+                    toast({
+                      title: "Player Eliminated!",
+                      description: `${playerName} has been eliminated.`,
+                      variant: "destructive",
+                    });
+                }
+            }
+        }
     }
-  }, [winner, eliminatedPlayerIds, prevEliminatedPlayerIds, players, toast]);
+  }, [winner, eliminatedPlayerIds, players, toast, history, historyIndex]);
   
   useEffect(() => {
     setSelectedSquare(null);
-  }, [currentPlayerIndex]);
+  }, [currentPlayerIndex, historyIndex]);
 
   const validMoves = useMemo(() => {
     if (!selectedSquare) return [];
@@ -258,14 +258,30 @@ export default function Game() {
         }
     });
 
-    setGameState(nextState);
+    const newHistory = history.slice(0, historyIndex + 1);
+    setHistory([...newHistory, nextState]);
+    setHistoryIndex(newHistory.length);
+
     setSelectedSquare(null);
   };
   
   const onRestart = () => {
-    setGameState(createNewGameState());
+    setHistory([createNewGameState()]);
+    setHistoryIndex(0);
     toast({ title: "Game Restarted", description: "A new game has begun." });
   }
+
+  const onUndo = () => {
+    if (historyIndex > 0) {
+        setHistoryIndex(historyIndex - 1);
+    }
+  };
+
+  const onRedo = () => {
+    if (historyIndex < history.length - 1) {
+        setHistoryIndex(historyIndex + 1);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -286,6 +302,10 @@ export default function Game() {
           eliminatedPlayers={eliminatedPlayerIds.map(id => players.find(p => p.id === id)!)}
           winner={winner ? players.find(p => p.id === winner)! : null}
           onRestart={onRestart}
+          onUndo={onUndo}
+          onRedo={onRedo}
+          canUndo={historyIndex > 0}
+          canRedo={historyIndex < history.length - 1}
           capturedPieces={capturedPieces}
           players={players}
         />

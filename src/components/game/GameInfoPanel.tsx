@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Crown, Swords, RefreshCw, Box } from 'lucide-react';
+import { Crown, Swords, RefreshCw, Box, Undo, Redo } from 'lucide-react';
 import type { Player, Piece, PlayerId } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS } from '@/lib/game/constants';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,10 @@ interface GameInfoPanelProps {
   onRestart: () => void;
   capturedPieces: { [key in PlayerId]?: Piece[] };
   players: Player[];
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const CapturedPiece = ({ piece }: { piece: Piece }) => {
@@ -44,7 +48,11 @@ export default function GameInfoPanel({
   winner,
   onRestart,
   capturedPieces,
-  players
+  players,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo,
 }: GameInfoPanelProps) {
 
   const activePlayers = players.filter(p => !eliminatedPlayers.find(ep => ep.id === p.id));
@@ -56,6 +64,12 @@ export default function GameInfoPanel({
           <CardTitle className="flex items-center justify-between">
             <span>Game Controls</span>
             <div className='flex items-center space-x-1'>
+                <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo move">
+                    <Undo className="h-5 w-5" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo move">
+                    <Redo className="h-5 w-5" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={onRestart} aria-label="Restart Game">
                     <RefreshCw className="h-5 w-5" />
                 </Button>
