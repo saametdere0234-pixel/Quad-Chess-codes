@@ -4,8 +4,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { produce } from 'immer';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
+import PromotionDialog from './PromotionDialog';
 import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
-import type { GameState, Move, Piece, PlayerId, Board } from '@/lib/game/types';
+import type { GameState, Move, Piece, PlayerId, Board, PieceType } from '@/lib/game/types';
 import { BOARD_SIZE, PLAYERS } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast";
 
@@ -84,6 +85,7 @@ export default function Game() {
   const gameState = history[historyIndex];
 
   const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
+  const [promotionMove, setPromotionMove] = useState<{ from: { row: number; col: number }; to: { row: number; col: number } } | null>(null);
   const { toast } = useToast();
 
   const { board, currentPlayerIndex, players, eliminatedPlayerIds, winner, lastMove, enPassantTarget, capturedPieces } = gameState;
@@ -140,30 +142,7 @@ export default function Game() {
       }
   }, [lastMove, currentUserPlayerId]);
 
-  const handleSquareClick = (row: number, col: number) => {
-    const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, currentUserPlayerId, BOARD_SIZE);
-    
-    if (winner) return;
-
-    const clickedSquare = board[originalRow][originalCol];
-    if (selectedSquare) {
-      const isValidMove = validMoves.some(move => move.row === originalRow && move.col === originalCol);
-
-      if (isValidMove) {
-        makeMove(selectedSquare, { row: originalRow, col: originalCol });
-      } else {
-        setSelectedSquare(
-          clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id
-            ? { row: originalRow, col: originalCol }
-            : null
-        );
-      }
-    } else if (clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id) {
-      setSelectedSquare({ row: originalRow, col: originalCol });
-    }
-  };
-
-  const makeMove = (from: { row: number, col: number }, to: { row: number, col: number }) => {
+  const applyMove = (from: { row: number, col: number }, to: { row: number, col: number }, promotionPieceType: PieceType | null = null) => {
     const fromPiece = gameState.board[from.row][from.col].piece;
     if (!fromPiece) return;
 
@@ -183,7 +162,11 @@ export default function Game() {
             }
         }
         
-        const movingPiece = { ...draft.board[from.row][from.col].piece!, hasMoved: true };
+        const movingPieceInfo = draft.board[from.row][from.col].piece!;
+        const movingPiece = {
+             ...(promotionPieceType ? { type: promotionPieceType, player: movingPieceInfo.player } : movingPieceInfo),
+             hasMoved: true
+        };
         draft.board[to.row][to.col].piece = movingPiece;
         draft.board[from.row][from.col].piece = null;
         draft.lastMove = move;
@@ -265,6 +248,51 @@ export default function Game() {
     setSelectedSquare(null);
   };
   
+  const handleSquareClick = (row: number, col: number) => {
+    const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, currentUserPlayerId, BOARD_SIZE);
+    
+    if (winner || promotionMove) return;
+
+    const clickedSquare = board[originalRow][originalCol];
+    if (selectedSquare) {
+      const isValidMove = validMoves.some(move => move.row === originalRow && move.col === originalCol);
+
+      if (isValidMove) {
+        const from = selectedSquare;
+        const to = { row: originalRow, col: originalCol };
+        const fromPiece = board[from.row][from.col].piece;
+
+        const isPromotion = fromPiece?.type === 'Pawn' && (
+            (fromPiece.player === 'Red' && to.row === 0) ||
+            (fromPiece.player === 'Blue' && to.row === 13) ||
+            (fromPiece.player === 'Yellow' && to.col === 13) ||
+            (fromPiece.player === 'Green' && to.col === 0)
+        );
+
+        if (isPromotion) {
+            setPromotionMove({ from, to });
+        } else {
+            applyMove(from, to);
+        }
+        setSelectedSquare(null);
+      } else {
+        setSelectedSquare(
+          clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id
+            ? { row: originalRow, col: originalCol }
+            : null
+        );
+      }
+    } else if (clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id) {
+      setSelectedSquare({ row: originalRow, col: originalCol });
+    }
+  };
+
+  const handlePromotionSelect = (pieceType: PieceType) => {
+    if (!promotionMove) return;
+    applyMove(promotionMove.from, promotionMove.to, pieceType);
+    setPromotionMove(null);
+  };
+
   const onRestart = () => {
     setHistory([createNewGameState()]);
     setHistoryIndex(0);
@@ -284,7 +312,7 @@ export default function Game() {
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
       <div className="md:col-span-2">
         <ChessBoard
           board={displayBoard}
@@ -310,6 +338,12 @@ export default function Game() {
           players={players}
         />
       </div>
+      {promotionMove && (
+        <PromotionDialog
+            player={currentPlayer}
+            onSelectPiece={handlePromotionSelect}
+        />
+      )}
     </div>
   );
 }
