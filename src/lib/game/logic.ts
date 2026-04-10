@@ -165,31 +165,31 @@ export const getValidMoves = (row: number, col: number, gameState: GameState): {
       if (!piece.hasMoved) {
         // Red (bottom)
         if (player === 'Red' && row === 13 && col === 7) {
-            // Kingside
+            // Kingside (short)
             if (board[13][10].piece?.type === 'Rook' && !board[13][10].piece.hasMoved && !board[13][8].piece && !board[13][9].piece) moves.push({ row: 13, col: 9 });
-            // Queenside
+            // Queenside (long)
             if (board[13][3].piece?.type === 'Rook' && !board[13][3].piece.hasMoved && !board[13][4].piece && !board[13][5].piece && !board[13][6].piece) moves.push({ row: 13, col: 5 });
         }
         // Blue (top)
         if (player === 'Blue' && row === 0 && col === 6) {
-            // Kingside (to col 8)
-            if (board[0][10].piece?.type === 'Rook' && !board[0][10].piece.hasMoved && !board[0][7].piece && !board[0][8].piece && !board[0][9].piece) moves.push({ row: 0, col: 8 });
-            // Queenside (to col 4)
+            // Kingside (left, short)
             if (board[0][3].piece?.type === 'Rook' && !board[0][3].piece.hasMoved && !board[0][4].piece && !board[0][5].piece) moves.push({ row: 0, col: 4 });
+            // Queenside (right, long)
+            if (board[0][10].piece?.type === 'Rook' && !board[0][10].piece.hasMoved && !board[0][7].piece && !board[0][8].piece && !board[0][9].piece) moves.push({ row: 0, col: 8 });
         }
         // Yellow (left)
-        if (player === 'Yellow' && row === 6 && col === 0) {
-            // "Kingside" (down to row 8)
-            if (board[10][0].piece?.type === 'Rook' && !board[10][0].piece.hasMoved && !board[7][0].piece && !board[8][0].piece && !board[9][0].piece) moves.push({ row: 8, col: 0 });
-            // "Queenside" (up to row 4)
-            if (board[3][0].piece?.type === 'Rook' && !board[3][0].piece.hasMoved && !board[4][0].piece && !board[5][0].piece) moves.push({ row: 4, col: 0 });
+        if (player === 'Yellow' && row === 7 && col === 0) {
+            // Kingside (down, short)
+            if (board[10][0].piece?.type === 'Rook' && !board[10][0].piece.hasMoved && !board[8][0].piece && !board[9][0].piece) moves.push({ row: 9, col: 0 });
+            // Queenside (up, long)
+            if (board[3][0].piece?.type === 'Rook' && !board[3][0].piece.hasMoved && !board[4][0].piece && !board[5][0].piece && !board[6][0].piece) moves.push({ row: 5, col: 0 });
         }
         // Green (right)
-        if (player === 'Green' && row === 7 && col === 13) {
-            // "Kingside" (up to row 5)
-            if (board[3][13].piece?.type === 'Rook' && !board[3][13].piece.hasMoved && !board[4][13].piece && !board[5][13].piece && !board[6][13].piece) moves.push({ row: 5, col: 13 });
-            // "Queenside" (down to row 9)
-            if (board[10][13].piece?.type === 'Rook' && !board[10][13].piece.hasMoved && !board[8][13].piece && !board[9][13].piece) moves.push({ row: 9, col: 13 });
+        if (player === 'Green' && row === 6 && col === 13) {
+            // Kingside (up, short)
+            if (board[3][13].piece?.type === 'Rook' && !board[3][13].piece.hasMoved && !board[4][13].piece && !board[5][13].piece) moves.push({ row: 4, col: 13 });
+            // Queenside (down, long)
+            if (board[10][13].piece?.type === 'Rook' && !board[10][13].piece.hasMoved && !board[7][13].piece && !board[8][13].piece && !board[9][13].piece) moves.push({ row: 8, col: 13 });
         }
       }
       break;
