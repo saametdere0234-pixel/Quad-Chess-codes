@@ -1,20 +1,16 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { Board, Move, Player, PlayerId, Piece } from '@/lib/game/types';
+import type { Board, Move, Piece } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS, BOARD_SIZE } from '@/lib/game/constants';
 import { memo } from 'react';
 
 interface ChessBoardProps {
   board: Board;
   onSquareClick: (row: number, col: number) => void;
-  onPieceDrop: (from: { row: number; col: number }, to: { row: number; col: number }) => void;
   selectedSquare: { row: number; col: number } | null;
   validMoves: { row: number; col: number }[];
   lastMove: Move | null;
-  players: Player[];
-  eliminatedPlayerIds: PlayerId[];
-  currentPlayerId: PlayerId;
 }
 
 interface SquareProps {
@@ -23,17 +19,13 @@ interface SquareProps {
     isValidMove: boolean;
     isLastMove: boolean;
     onClick: () => void;
-    onDrop: (e: React.DragEvent) => void;
-    onDragOver: (e: React.DragEvent) => void;
     hasPiece: boolean;
 }
 
-const Square = memo(function Square({ isLightSquare, isSelected, isValidMove, isLastMove, onClick, onDrop, onDragOver, hasPiece }: SquareProps) {
+const Square = memo(function Square({ isLightSquare, isSelected, isValidMove, isLastMove, onClick, hasPiece }: SquareProps) {
     return (
         <button
           onClick={onClick}
-          onDrop={onDrop}
-          onDragOver={onDragOver}
           className={cn(
             'relative flex items-center justify-center w-full h-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring',
             isLightSquare ? 'bg-secondary' : 'bg-muted',
@@ -59,14 +51,10 @@ const PieceComponent = ({
     piece,
     row,
     col,
-    isDraggable,
-    onDragStart,
   }: {
     piece: Piece;
     row: number;
     col: number;
-    isDraggable: boolean;
-    onDragStart: (e: React.DragEvent) => void;
   }) => {
     const player = PLAYERS.find((p) => p.id === piece.player);
     if (!player) return null;
@@ -75,19 +63,12 @@ const PieceComponent = ({
   
     return (
       <div
-        draggable={isDraggable}
-        onDragStart={isDraggable ? onDragStart : undefined}
-        className={cn(
-          "absolute flex items-center justify-center transition-all duration-300 ease-in-out",
-          isDraggable ? "cursor-grab" : "cursor-default",
-          isDraggable && "active:cursor-grabbing"
-        )}
+        className="absolute flex items-center justify-center cursor-default"
         style={{
           width: `${squareSizePercent}%`,
           height: `${squareSizePercent}%`,
           top: `${row * squareSizePercent}%`,
           left: `${col * squareSizePercent}%`,
-          pointerEvents: 'auto',
         }}
       >
         <span
@@ -107,29 +88,10 @@ const PieceComponent = ({
 const ChessBoard = ({
   board,
   onSquareClick,
-  onPieceDrop,
   selectedSquare,
   validMoves,
   lastMove,
-  currentPlayerId,
 }: ChessBoardProps) => {
-
-  const handleDragStart = (e: React.DragEvent, from: { row: number; col: number }) => {
-    e.dataTransfer.setData('application/json', JSON.stringify({ from }));
-  };
-
-  const handleDrop = (e: React.DragEvent, to: { row: number; col: number }) => {
-    e.preventDefault();
-    const data = e.dataTransfer.getData('application/json');
-    if (data) {
-      const { from } = JSON.parse(data);
-      onPieceDrop(from, to);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
   
   return (
     <div className="aspect-square w-full bg-card p-2 rounded-lg shadow-lg">
@@ -156,8 +118,6 @@ const ChessBoard = ({
                   isValidMove={isValidMove}
                   isLastMove={isLastMove}
                   onClick={() => onSquareClick(rowIndex, colIndex)}
-                  onDrop={(e) => handleDrop(e, { row: rowIndex, col: colIndex })}
-                  onDragOver={handleDragOver}
                   hasPiece={!!square.piece}
                 />
               );
@@ -165,7 +125,7 @@ const ChessBoard = ({
           )}
         </div>
         
-        {/* Pieces layer for display and animation */}
+        {/* Pieces layer for display */}
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none">
           {board.flatMap((row, rowIndex) =>
             row.map((square, colIndex) => {
@@ -176,8 +136,6 @@ const ChessBoard = ({
                     piece={square.piece}
                     row={rowIndex}
                     col={colIndex}
-                    isDraggable={square.piece.player === currentPlayerId}
-                    onDragStart={(e) => handleDragStart(e, { row: square.row, col: square.col })}
                   />
                 );
               }

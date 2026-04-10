@@ -125,14 +125,10 @@ export default function Game() {
 
   const validMoves = useMemo(() => {
     if (!selectedSquare) return [];
-    const rotatedSelectedSquare = getRotatedCoords(selectedSquare.row, selectedSquare.col, currentUserPlayerId, BOARD_SIZE);
-    const originalCoords = getOriginalCoords(rotatedSelectedSquare.row, rotatedSelectedSquare.col, currentUserPlayerId, BOARD_SIZE);
-    
     // The valid moves should be calculated from original board state
     const moves = getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
     // Then the valid moves should be rotated for display
     return moves.map(move => getRotatedCoords(move.row, move.col, currentUserPlayerId, BOARD_SIZE));
-
   }, [selectedSquare, gameState, currentUserPlayerId]);
 
   const displayBoard = useMemo(() => getRotatedBoard(board, currentUserPlayerId), [board, currentUserPlayerId]);
@@ -141,11 +137,6 @@ export default function Game() {
     if (!selectedSquare) return null;
     return getRotatedCoords(selectedSquare.row, selectedSquare.col, currentUserPlayerId, BOARD_SIZE);
   }, [selectedSquare, currentUserPlayerId]);
-
-  const displayValidMoves = useMemo(() => {
-      if (!selectedSquare) return [];
-      return getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
-  }, [selectedSquare, gameState]);
 
   const displayLastMove = useMemo(() => {
       if (!lastMove) return null;
@@ -304,14 +295,6 @@ export default function Game() {
     }
   };
 
-  const handlePieceDrop = (from: { row: number, col: number }, to: { row: number, col: number }) => {
-    if (winner || promotionMove) return;
-    
-    const { row: originalToRow, col: originalToCol } = getOriginalCoords(to.row, to.col, currentUserPlayerId, BOARD_SIZE);
-    
-    handleAttemptMove(from, { row: originalToRow, col: originalToCol });
-  };
-
   const handlePromotionSelect = (pieceType: PieceType) => {
     if (!promotionMove) return;
     applyMove(promotionMove.from, promotionMove.to, pieceType);
@@ -342,13 +325,9 @@ export default function Game() {
         <ChessBoard
           board={displayBoard}
           onSquareClick={handleSquareClick}
-          onPieceDrop={handlePieceDrop}
           selectedSquare={displaySelectedSquare}
-          validMoves={displayValidMoves}
+          validMoves={validMoves}
           lastMove={displayLastMove}
-          players={players}
-          eliminatedPlayerIds={eliminatedPlayerIds}
-          currentPlayerId={currentPlayer.id}
         />
       </div>
       <div>
