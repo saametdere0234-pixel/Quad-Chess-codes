@@ -80,10 +80,13 @@ const Square = memo(function Square({ square, isLightSquare, isSelected, isValid
           )}
           aria-label={`Square ${square.row}, ${square.col} with ${square.piece ? `${square.piece.player} ${square.piece.type}` : 'empty'}`}
         >
-          {square.piece && (
+          {square.piece && player && (
             <span
               className="text-2xl md:text-3xl lg:text-4xl"
-              style={{ textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}
+              style={{
+                color: player.color,
+                filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.4))'
+              }}
             >
               {PIECE_EMOJIS[square.piece.player][square.piece.type]}
             </span>
@@ -95,12 +98,6 @@ const Square = memo(function Square({ square, isLightSquare, isSelected, isValid
                 square.piece ? 'w-full h-full border-4 border-accent/50' : 'w-1/3 h-1/3 bg-accent/50'
               )}></div>
             </div>
-          )}
-          {player && (
-             <div 
-                className="absolute bottom-0 right-0 w-2 h-2 rounded-full m-1 border border-background/50"
-                style={{ backgroundColor: player.color }}
-             />
           )}
         </button>
     );

@@ -10,6 +10,7 @@ export interface Player {
 export interface Piece {
   type: PieceType;
   player: PlayerId;
+  hasMoved?: boolean;
 }
 
 export interface Square {
@@ -33,6 +34,7 @@ export interface GameState {
   eliminatedPlayerIds: PlayerId[];
   winner: PlayerId | null;
   lastMove: Move | null;
+  enPassantTarget: { row: number; col: number } | null;
 }
 
 export interface FormattedLastMove {
