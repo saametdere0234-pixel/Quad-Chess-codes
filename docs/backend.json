@@ -1,73 +1,7 @@
 {
-  "entities": {
-    "UserProfile": {
-      "title": "User Profile",
-      "description": "Represents a user's public profile.",
-      "type": "object",
-      "properties": {
-        "username": {
-          "type": "string",
-          "description": "The user's unique display name."
-        },
-        "email": {
-          "type": "string",
-          "format": "email",
-          "description": "The user's email address."
-        },
-        "uid": {
-          "type": "string",
-          "description": "The user's Firebase Authentication UID."
-        }
-      },
-      "required": ["username", "email", "uid"]
-    },
-    "Game": {
-      "title": "Game",
-      "description": "Represents a single game room.",
-      "type": "object",
-      "properties": {
-        "roomCode": {
-          "type": "string",
-          "description": "The 6-digit code to join the room."
-        },
-        "players": {
-          "type": "object",
-          "description": "Maps PlayerId to user UID.",
-          "properties": {}
-        },
-        "playerIds": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "Array of user UIDs in the game."
-        },
-        "gameState": {
-          "type": "string",
-          "description": "The JSON-stringified game state."
-        },
-        "status": {
-          "type": "string",
-          "enum": ["waiting", "in-progress", "finished"],
-          "description": "The current status of the game."
-        },
-        "host": {
-            "type": "string",
-            "description": "The UID of the host player."
-        }
-      },
-      "required": ["roomCode", "players", "playerIds", "gameState", "status", "host"]
-    }
-  },
+  "entities": {},
   "auth": {
-    "providers": ["Google"]
+    "providers": []
   },
-  "firestore": {
-    "/users/{userId}": {
-      "schema": { "$ref": "#/entities/UserProfile" },
-      "description": "Stores public user profile information."
-    },
-    "/games/{gameId}": {
-      "schema": { "$ref": "#/entities/Game" },
-      "description": "Stores the state for each game room."
-    }
-  }
+  "firestore": {}
 }

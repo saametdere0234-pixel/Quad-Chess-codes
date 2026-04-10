@@ -1,22 +1,13 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { useFirestore } from '@/firebase/provider';
+import { produce } from 'immer';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
-import { getValidMoves } from '@/lib/game/logic';
+import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board } from '@/lib/game/types';
-import { BOARD_SIZE } from '@/lib/game/constants';
-import { useToast } from "@/hooks/use-toast"
-import { produce } from 'immer';
-
-interface GameProps {
-    gameId: string;
-    initialGameState: GameState;
-    playersMap: { [key: string]: string };
-    currentUserPlayerId: PlayerId;
-}
+import { BOARD_SIZE, PLAYERS } from '@/lib/game/constants';
+import { useToast } from "@/hooks/use-toast";
 
 function usePrevious<T>(value: T) {
   const ref = useRef<T>();
@@ -25,6 +16,18 @@ function usePrevious<T>(value: T) {
   });
   return ref.current;
 }
+
+const createNewGameState = (): GameState => ({
+  board: createInitialBoard(),
+  currentPlayerIndex: 0,
+  players: PLAYERS,
+  eliminatedPlayerIds: [],
+  winner: null,
+  lastMove: null,
+  enPassantTarget: null,
+  capturedPieces: {},
+});
+
 
 function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   const size = board.length;
@@ -40,11 +43,11 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   switch (playerId) {
     case 'Red':
       return newBoard; 
-    case 'Green':
+    case 'Yellow': // Swapped with Green for new turn order
       return rotate90(newBoard);
     case 'Blue':
       return rotate180(newBoard);
-    case 'Yellow':
+    case 'Green': // Swapped with Yellow for new turn order
       return rotate270(newBoard);
     default:
       return newBoard;
@@ -55,11 +58,11 @@ function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: n
   switch (playerId) {
     case 'Red':
       return { row, col };
-    case 'Green':
+    case 'Yellow': // Swapped
       return { row: size - 1 - col, col: row };
     case 'Blue':
       return { row: size - 1 - row, col: size - 1 - col };
-    case 'Yellow':
+    case 'Green': // Swapped
       return { row: col, col: size - 1 - row };
     default:
       return { row, col };
@@ -71,11 +74,11 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
     switch (playerId) {
         case 'Red':
             return { row, col };
-        case 'Green':
+        case 'Yellow': // Swapped
             return { row: col, col: size - 1 - row };
         case 'Blue':
             return { row: size - 1 - row, col: size - 1 - col };
-        case 'Yellow':
+        case 'Green': // Swapped
             return { row: size - 1 - col, col: row };
         default:
             return { row, col };
@@ -83,19 +86,14 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
 }
 
 
-export default function Game({ gameId, initialGameState, playersMap, currentUserPlayerId }: GameProps) {
-  const [gameState, setGameState] = useState<GameState>(initialGameState);
+export default function Game() {
+  const [gameState, setGameState] = useState<GameState>(createNewGameState());
   const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
   const { toast } = useToast();
-  const firestore = useFirestore();
-
-  useEffect(() => {
-    setGameState(initialGameState);
-  }, [initialGameState]);
 
   const { board, currentPlayerIndex, players, eliminatedPlayerIds, winner, lastMove, enPassantTarget, capturedPieces } = gameState;
   const currentPlayer = useMemo(() => players[currentPlayerIndex], [players, currentPlayerIndex]);
-  const isMyTurn = currentPlayer.id === currentUserPlayerId;
+  const currentUserPlayerId = currentPlayer.id;
 
   const prevEliminatedPlayerIds = usePrevious(eliminatedPlayerIds);
 
@@ -122,9 +120,9 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
   }, [currentPlayerIndex]);
 
   const validMoves = useMemo(() => {
-    if (!selectedSquare || !isMyTurn) return [];
+    if (!selectedSquare) return [];
     return getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
-  }, [selectedSquare, gameState, isMyTurn]);
+  }, [selectedSquare, gameState]);
 
   const displayBoard = useMemo(() => getRotatedBoard(board, currentUserPlayerId), [board, currentUserPlayerId]);
   const displaySelectedSquare = useMemo(() => {
@@ -145,7 +143,7 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
   const handleSquareClick = (row: number, col: number) => {
     const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, currentUserPlayerId, BOARD_SIZE);
     
-    if (winner || !isMyTurn) return;
+    if (winner) return;
 
     const clickedSquare = board[originalRow][originalCol];
     if (selectedSquare) {
@@ -165,9 +163,8 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
     }
   };
 
-  const makeMove = async (from: { row: number, col: number }, to: { row: number, col: number }) => {
-    if (!firestore) return;
-    const fromPiece = board[from.row][from.col].piece;
+  const makeMove = (from: { row: number, col: number }, to: { row: number, col: number }) => {
+    const fromPiece = gameState.board[from.row][from.col].piece;
     if (!fromPiece) return;
 
     const nextState = produce(gameState, draft => {
@@ -248,31 +245,26 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
           }
         }
 
-        const joinedAndActivePlayers = draft.players.filter(p => 
-            !draft.eliminatedPlayerIds.includes(p.id) && playersMap[p.id]
-        );
+        const activePlayers = draft.players.filter(p => !draft.eliminatedPlayerIds.includes(p.id));
 
-        if (joinedAndActivePlayers.length <= 1) {
-            draft.winner = joinedAndActivePlayers[0]?.id || null;
+        if (activePlayers.length <= 1) {
+            draft.winner = activePlayers[0]?.id || null;
         } else {
             let nextPlayerIndex = draft.currentPlayerIndex;
             do {
                 nextPlayerIndex = (nextPlayerIndex + 1) % draft.players.length;
-            } while (!playersMap[draft.players[nextPlayerIndex].id] || draft.eliminatedPlayerIds.includes(draft.players[nextPlayerIndex].id));
+            } while (draft.eliminatedPlayerIds.includes(draft.players[nextPlayerIndex].id));
             draft.currentPlayerIndex = nextPlayerIndex;
         }
     });
 
-    const gameRef = doc(firestore, 'games', gameId);
-    await updateDoc(gameRef, {
-        gameState: JSON.stringify(nextState),
-    });
-    
+    setGameState(nextState);
     setSelectedSquare(null);
   };
   
   const onRestart = () => {
-    toast({ title: "Restart not implemented in multiplayer yet." });
+    setGameState(createNewGameState());
+    toast({ title: "Game Restarted", description: "A new game has begun." });
   }
 
   return (

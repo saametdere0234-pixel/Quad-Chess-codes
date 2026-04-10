@@ -5,12 +5,12 @@ export const INACTIVE_ZONE_SIZE = 3;
 
 export const PLAYERS: Player[] = [
   { id: 'Red', name: 'Player 1 (Red)', color: '#ef4444' },
-  { id: 'Green', name: 'Player 2 (Green)', color: '#22c55e' },
+  { id: 'Yellow', name: 'Player 2 (Yellow)', color: '#eab308' },
   { id: 'Blue', name: 'Player 3 (Blue)', color: '#3b82f6' },
-  { id: 'Yellow', name: 'Player 4 (Yellow)', color: '#eab308' },
+  { id: 'Green', name: 'Player 4 (Green)', color: '#22c55e' },
 ];
 
-export const PLAYER_IDS: PlayerId[] = ['Red', 'Green', 'Blue', 'Yellow'];
+export const PLAYER_IDS: PlayerId[] = ['Red', 'Yellow', 'Blue', 'Green'];
 
 export const PIECE_EMOJIS: Record<PlayerId, Record<PieceType, string>> = {
   Red: { King: '♚', Queen: '♛', Rook: '♜', Bishop: '♝', Knight: '♞', Pawn: '♟' },

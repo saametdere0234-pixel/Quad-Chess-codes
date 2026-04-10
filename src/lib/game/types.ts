@@ -37,14 +37,3 @@ export interface GameState {
   enPassantTarget: { row: number; col: number } | null;
   capturedPieces: { [key in PlayerId]?: Piece[] };
 }
-
-// For Firestore
-export interface Game {
-    id: string;
-    roomCode: string;
-    players: { [key: string]: string }; // Map of PlayerId to UID
-    playerIds: string[]; // Array of UIDs
-    gameState: string; // JSON string of GameState
-    status: 'waiting' | 'in-progress' | 'finished';
-    host: string;
-}
