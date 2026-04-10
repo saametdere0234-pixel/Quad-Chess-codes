@@ -24,9 +24,11 @@ const createNewGameState = (): GameState => ({
 
 function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   const size = board.length;
+  // Create a deep copy to avoid mutation issues.
   const newBoard: Board = JSON.parse(JSON.stringify(board)); 
 
   const rotate90 = (b: Board): Board => {
+    // A bit of a complex operation to rotate a 2D array and update square coords
     const rotated = b[0].map((_, colIndex) => b.map(row => row[colIndex]).reverse());
     return rotated.map((row, rowIndex) => row.map((sq, colIndex) => ({...sq, row: rowIndex, col: colIndex})));
   };
@@ -123,17 +125,28 @@ export default function Game() {
 
   const validMoves = useMemo(() => {
     if (!selectedSquare) return [];
-    return getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
-  }, [selectedSquare, gameState]);
+    const rotatedSelectedSquare = getRotatedCoords(selectedSquare.row, selectedSquare.col, currentUserPlayerId, BOARD_SIZE);
+    const originalCoords = getOriginalCoords(rotatedSelectedSquare.row, rotatedSelectedSquare.col, currentUserPlayerId, BOARD_SIZE);
+    
+    // The valid moves should be calculated from original board state
+    const moves = getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
+    // Then the valid moves should be rotated for display
+    return moves.map(move => getRotatedCoords(move.row, move.col, currentUserPlayerId, BOARD_SIZE));
+
+  }, [selectedSquare, gameState, currentUserPlayerId]);
 
   const displayBoard = useMemo(() => getRotatedBoard(board, currentUserPlayerId), [board, currentUserPlayerId]);
+  
   const displaySelectedSquare = useMemo(() => {
     if (!selectedSquare) return null;
     return getRotatedCoords(selectedSquare.row, selectedSquare.col, currentUserPlayerId, BOARD_SIZE);
   }, [selectedSquare, currentUserPlayerId]);
+
   const displayValidMoves = useMemo(() => {
-      return validMoves.map(move => getRotatedCoords(move.row, move.col, currentUserPlayerId, BOARD_SIZE));
-  }, [validMoves, currentUserPlayerId]);
+      if (!selectedSquare) return [];
+      return getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
+  }, [selectedSquare, gameState]);
+
   const displayLastMove = useMemo(() => {
       if (!lastMove) return null;
       return {
@@ -141,6 +154,7 @@ export default function Game() {
           to: getRotatedCoords(lastMove.to.row, lastMove.to.col, currentUserPlayerId, BOARD_SIZE),
       }
   }, [lastMove, currentUserPlayerId]);
+
 
   const applyMove = (from: { row: number, col: number }, to: { row: number, col: number }, promotionPieceType: PieceType | null = null) => {
     const fromPiece = gameState.board[from.row][from.col].piece;
@@ -248,6 +262,33 @@ export default function Game() {
     setSelectedSquare(null);
   };
   
+  const handleAttemptMove = (from: { row: number, col: number }, to: { row: number, col: number }) => {
+    const fromPiece = gameState.board[from.row][from.col].piece;
+    if (!fromPiece || fromPiece.player !== currentPlayer.id) {
+      setSelectedSquare(null);
+      return;
+    }
+
+    const validMovesForPiece = getValidMoves(from.row, from.col, gameState);
+    const isMoveValid = validMovesForPiece.some(move => move.row === to.row && move.col === to.col);
+
+    if (isMoveValid) {
+      const isPromotion = fromPiece.type === 'Pawn' && (
+          (fromPiece.player === 'Red' && to.row === 0) ||
+          (fromPiece.player === 'Blue' && to.row === 13) ||
+          (fromPiece.player === 'Yellow' && to.col === 13) ||
+          (fromPiece.player === 'Green' && to.col === 0)
+      );
+
+      if (isPromotion) {
+          setPromotionMove({ from, to });
+      } else {
+          applyMove(from, to);
+      }
+    }
+    setSelectedSquare(null);
+  };
+
   const handleSquareClick = (row: number, col: number) => {
     const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, currentUserPlayerId, BOARD_SIZE);
     
@@ -255,36 +296,20 @@ export default function Game() {
 
     const clickedSquare = board[originalRow][originalCol];
     if (selectedSquare) {
-      const isValidMove = validMoves.some(move => move.row === originalRow && move.col === originalCol);
-
-      if (isValidMove) {
-        const from = selectedSquare;
-        const to = { row: originalRow, col: originalCol };
-        const fromPiece = board[from.row][from.col].piece;
-
-        const isPromotion = fromPiece?.type === 'Pawn' && (
-            (fromPiece.player === 'Red' && to.row === 0) ||
-            (fromPiece.player === 'Blue' && to.row === 13) ||
-            (fromPiece.player === 'Yellow' && to.col === 13) ||
-            (fromPiece.player === 'Green' && to.col === 0)
-        );
-
-        if (isPromotion) {
-            setPromotionMove({ from, to });
-        } else {
-            applyMove(from, to);
-        }
-        setSelectedSquare(null);
-      } else {
-        setSelectedSquare(
-          clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id
-            ? { row: originalRow, col: originalCol }
-            : null
-        );
-      }
+      handleAttemptMove(selectedSquare, { row: originalRow, col: originalCol });
     } else if (clickedSquare.piece && clickedSquare.piece.player === currentPlayer.id) {
       setSelectedSquare({ row: originalRow, col: originalCol });
+    } else {
+      setSelectedSquare(null);
     }
+  };
+
+  const handlePieceDrop = (from: { row: number, col: number }, to: { row: number, col: number }) => {
+    if (winner || promotionMove) return;
+    
+    const { row: originalToRow, col: originalToCol } = getOriginalCoords(to.row, to.col, currentUserPlayerId, BOARD_SIZE);
+    
+    handleAttemptMove(from, { row: originalToRow, col: originalToCol });
   };
 
   const handlePromotionSelect = (pieceType: PieceType) => {
@@ -317,11 +342,13 @@ export default function Game() {
         <ChessBoard
           board={displayBoard}
           onSquareClick={handleSquareClick}
+          onPieceDrop={handlePieceDrop}
           selectedSquare={displaySelectedSquare}
           validMoves={displayValidMoves}
           lastMove={displayLastMove}
           players={players}
           eliminatedPlayerIds={eliminatedPlayerIds}
+          currentPlayerId={currentPlayer.id}
         />
       </div>
       <div>
