@@ -84,8 +84,7 @@ const Square = memo(function Square({ square, isLightSquare, isSelected, isValid
             <span
               className="text-2xl md:text-3xl lg:text-4xl"
               style={{
-                color: player.color,
-                filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.4))'
+                filter: `drop-shadow(0 0 3px ${player.color}) drop-shadow(0 1px 1px rgba(0,0,0,0.5))`
               }}
             >
               {PIECE_EMOJIS[square.piece.player][square.piece.type]}

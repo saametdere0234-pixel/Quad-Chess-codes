@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { useAuth, useFirestore } from '@/firebase';
+import { useAuth } from '@/firebase/provider';
+import { useFirestore } from '@/firebase/provider';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { doc, getDoc } from 'firebase/firestore';

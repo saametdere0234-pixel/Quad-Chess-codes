@@ -1,7 +1,9 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useFirestore, useUser, useDoc } from '@/firebase';
+import { useFirestore } from '@/firebase/provider';
+import { useUser } from '@/firebase/auth/use-user';
+import { useDoc } from '@/firebase/firestore/use-doc';
 import { doc, updateDoc } from 'firebase/firestore';
 import Game from '@/components/game/Game';
 import type { GameState } from '@/lib/game/types';
@@ -85,16 +87,17 @@ export default function GamePage() {
                 <h2 className="text-3xl font-bold mb-4">Waiting Room</h2>
                 <p className="mb-2">Room Code: <span className="font-bold text-lg tracking-widest">{game.roomCode}</span></p>
                 <p className="mb-4">Waiting for players to join...</p>
-                <ul className="mb-6">
+                <ul className="mb-6 space-y-2">
                     {gameState.players.map(p => (
                         <li key={p.id} className="flex items-center justify-center gap-2">
                              <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.color }}/>
-                             <span>{p.name}: {game.players[p.id] ? "Joined" : "Waiting..."}</span>
+                             <span className='font-semibold'>{p.id}:</span>
+                             <span>{game.players[p.id] ? "Joined" : "Waiting..."}</span>
                         </li>
                     ))}
                 </ul>
                 {game.host === user.uid && (
-                    <Button onClick={handleStartGame} disabled={game.playerIds.length < 2}>Start Game</Button>
+                    <Button onClick={handleStartGame} disabled={Object.keys(game.players).length < 2}>Start Game</Button>
                 )}
                  {game.host !== user.uid && (
                     <p>The host will start the game shortly.</p>

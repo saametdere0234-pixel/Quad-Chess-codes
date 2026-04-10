@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Crown, Swords, RefreshCw, Undo2, Redo2, Box } from 'lucide-react';
+import { Crown, Swords, RefreshCw, Box } from 'lucide-react';
 import type { Player, Piece, PlayerId } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS } from '@/lib/game/constants';
 import { cn } from '@/lib/utils';
@@ -15,10 +15,6 @@ interface GameInfoPanelProps {
   eliminatedPlayers: Player[];
   winner: Player | null;
   onRestart: () => void;
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
   capturedPieces: { [key in PlayerId]?: Piece[] };
   players: Player[];
 }
@@ -32,8 +28,7 @@ const CapturedPiece = ({ piece }: { piece: Piece }) => {
           className="text-xl"
           title={`${player.name} ${piece.type}`}
           style={{
-            color: player.color,
-            filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.4))'
+             filter: `drop-shadow(0 0 2px ${player.color}) drop-shadow(0 1px 1px rgba(0,0,0,0.5))`
           }}
         >
             {PIECE_EMOJIS[piece.player][piece.type]}
@@ -46,10 +41,6 @@ export default function GameInfoPanel({
   eliminatedPlayers,
   winner,
   onRestart,
-  onUndo,
-  onRedo,
-  canUndo,
-  canRedo,
   capturedPieces,
   players
 }: GameInfoPanelProps) {
@@ -63,12 +54,6 @@ export default function GameInfoPanel({
           <CardTitle className="flex items-center justify-between">
             <span>Game Controls</span>
             <div className='flex items-center space-x-1'>
-                <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo move">
-                    <Undo2 className="h-5 w-5" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo move">
-                    <Redo2 className="h-5 w-5" />
-                </Button>
                 <Button variant="ghost" size="icon" onClick={onRestart} aria-label="Restart Game">
                     <RefreshCw className="h-5 w-5" />
                 </Button>

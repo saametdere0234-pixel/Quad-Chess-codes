@@ -1,15 +1,15 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase/provider';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
 import { getValidMoves } from '@/lib/game/logic';
-import type { GameState, Move, Square, PlayerId, Board, Piece } from '@/lib/game/types';
+import type { GameState, Move, Piece, PlayerId, Board } from '@/lib/game/types';
 import { BOARD_SIZE } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast"
 import { produce } from 'immer';
-import { useFirestore } from '@/firebase';
 
 interface GameProps {
     gameId: string;
@@ -18,9 +18,16 @@ interface GameProps {
     currentUserPlayerId: PlayerId;
 }
 
+function usePrevious<T>(value: T) {
+  const ref = useRef<T>();
+  useEffect(() => {
+    ref.current = value;
+  });
+  return ref.current;
+}
+
 function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   const size = board.length;
-  // Deep copy to avoid mutation issues
   const newBoard: Board = JSON.parse(JSON.stringify(board)); 
 
   const rotate90 = (b: Board): Board => {
@@ -33,11 +40,11 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
   switch (playerId) {
     case 'Red':
       return newBoard; 
-    case 'Yellow':
+    case 'Green':
       return rotate90(newBoard);
     case 'Blue':
       return rotate180(newBoard);
-    case 'Green':
+    case 'Yellow':
       return rotate270(newBoard);
     default:
       return newBoard;
@@ -46,13 +53,13 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
 
 function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
   switch (playerId) {
-    case 'Red': // 0
+    case 'Red':
       return { row, col };
-    case 'Yellow': // 90
+    case 'Green':
       return { row: size - 1 - col, col: row };
-    case 'Blue': // 180
+    case 'Blue':
       return { row: size - 1 - row, col: size - 1 - col };
-    case 'Green': // 270
+    case 'Yellow':
       return { row: col, col: size - 1 - row };
     default:
       return { row, col };
@@ -62,13 +69,13 @@ function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: n
 function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
     if (row === -1 || col === -1) return {row, col};
     switch (playerId) {
-        case 'Red': // 0
+        case 'Red':
             return { row, col };
-        case 'Yellow': // 90
+        case 'Green':
             return { row: col, col: size - 1 - row };
-        case 'Blue': // 180
+        case 'Blue':
             return { row: size - 1 - row, col: size - 1 - col };
-        case 'Green': // 270
+        case 'Yellow':
             return { row: size - 1 - col, col: row };
         default:
             return { row, col };
@@ -77,29 +84,20 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
 
 
 export default function Game({ gameId, initialGameState, playersMap, currentUserPlayerId }: GameProps) {
-  const [history, setHistory] = useState<GameState[]>([initialGameState]);
-  const [currentMoveIndex, setCurrentMoveIndex] = useState(0);
-  
-  const gameState = history[currentMoveIndex];
-  
+  const [gameState, setGameState] = useState<GameState>(initialGameState);
   const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
   const { toast } = useToast();
   const firestore = useFirestore();
 
-  // Sync with Firestore state
   useEffect(() => {
-    setHistory([initialGameState]);
-    setCurrentMoveIndex(0);
+    setGameState(initialGameState);
   }, [initialGameState]);
 
   const { board, currentPlayerIndex, players, eliminatedPlayerIds, winner, lastMove, enPassantTarget, capturedPieces } = gameState;
   const currentPlayer = useMemo(() => players[currentPlayerIndex], [players, currentPlayerIndex]);
   const isMyTurn = currentPlayer.id === currentUserPlayerId;
 
-  const validMoves = useMemo(() => {
-    if (!selectedSquare || !isMyTurn) return [];
-    return getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
-  }, [selectedSquare, gameState, isMyTurn]);
+  const prevEliminatedPlayerIds = usePrevious(eliminatedPlayerIds);
 
   useEffect(() => {
     if (winner) {
@@ -107,12 +105,26 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
             title: "Game Over!",
             description: `${players.find(p => p.id === winner)?.name} is victorious!`,
         })
+    } else if (prevEliminatedPlayerIds && eliminatedPlayerIds.length > prevEliminatedPlayerIds.length) {
+      const newlyEliminatedId = eliminatedPlayerIds.find(id => !prevEliminatedPlayerIds.includes(id));
+      if (newlyEliminatedId) {
+        toast({
+          title: "Player Eliminated!",
+          description: `${players.find(p => p.id === newlyEliminatedId)?.name} has been eliminated.`,
+          variant: "destructive",
+        });
+      }
     }
-  }, [winner, players, toast]);
+  }, [winner, eliminatedPlayerIds, prevEliminatedPlayerIds, players, toast]);
   
   useEffect(() => {
     setSelectedSquare(null);
-  }, [currentPlayerIndex, currentMoveIndex]);
+  }, [currentPlayerIndex]);
+
+  const validMoves = useMemo(() => {
+    if (!selectedSquare || !isMyTurn) return [];
+    return getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
+  }, [selectedSquare, gameState, isMyTurn]);
 
   const displayBoard = useMemo(() => getRotatedBoard(board, currentUserPlayerId), [board, currentUserPlayerId]);
   const displaySelectedSquare = useMemo(() => {
@@ -158,22 +170,22 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
     const fromPiece = board[from.row][from.col].piece;
     if (!fromPiece) return;
 
-    let capturedPiece: Piece | null = board[to.row][to.col].piece;
-    const move: Move = { from, to };
-    const isEnPassant = fromPiece.type === 'Pawn' && !!enPassantTarget && to.row === enPassantTarget.row && to.col === enPassantTarget.col;
-    
-    if (isEnPassant) {
-        let capturedPawnPos: { row: number, col: number } | null = null;
-        if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
-        else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
-        else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col + 1 };
-        else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col - 1 };
-        if (capturedPawnPos && board[capturedPawnPos.row]?.[capturedPawnPos.col]?.piece) {
-            capturedPiece = board[capturedPawnPos.row][capturedPawnPos.col].piece;
-        }
-    }
-
     const nextState = produce(gameState, draft => {
+        let capturedPiece: Piece | null = draft.board[to.row][to.col].piece;
+        const move: Move = { from, to };
+        const isEnPassant = fromPiece.type === 'Pawn' && !!draft.enPassantTarget && to.row === draft.enPassantTarget.row && to.col === draft.enPassantTarget.col;
+        
+        if (isEnPassant) {
+            let capturedPawnPos: { row: number, col: number } | null = null;
+            if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
+            else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
+            else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
+            else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col + 1 };
+            if (capturedPawnPos && draft.board[capturedPawnPos.row]?.[capturedPawnPos.col]?.piece) {
+                capturedPiece = draft.board[capturedPawnPos.row][capturedPawnPos.col].piece;
+            }
+        }
+        
         const movingPiece = { ...draft.board[from.row][from.col].piece!, hasMoved: true };
         draft.board[to.row][to.col].piece = movingPiece;
         draft.board[from.row][from.col].piece = null;
@@ -196,14 +208,14 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
           let capturedPawnPos: { row: number, col: number } | null = null;
           if (fromPiece.player === 'Red') capturedPawnPos = { row: to.row + 1, col: to.col };
           else if (fromPiece.player === 'Blue') capturedPawnPos = { row: to.row - 1, col: to.col };
-          else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col + 1 };
-          else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col - 1 };
+          else if (fromPiece.player === 'Yellow') capturedPawnPos = { row: to.row, col: to.col - 1 };
+          else if (fromPiece.player === 'Green') capturedPawnPos = { row: to.row, col: to.col + 1 };
           if(capturedPawnPos) {
             draft.board[capturedPawnPos.row][capturedPawnPos.col].piece = null;
           }
         }
         if (fromPiece.type === 'King' && (Math.abs(from.col - to.col) === 2 || Math.abs(from.row - to.row) === 2)) {
-          if (Math.abs(from.col - to.col) === 2) {
+          if (Math.abs(from.col - to.col) === 2) { // Horizontal castling
               const rookFromCol = to.col > from.col ? 10 : 3;
               const rookToCol = to.col > from.col ? to.col - 1 : to.col + 1;
               const rook = draft.board[from.row][rookFromCol]?.piece;
@@ -212,7 +224,7 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
                   draft.board[from.row][rookFromCol].piece = null;
               }
           }
-          if (Math.abs(from.row - to.row) === 2) {
+          if (Math.abs(from.row - to.row) === 2) { // Vertical castling
               const rookFromRow = to.row > from.row ? 10 : 3;
               const rookToRow = to.row > from.row ? to.row - 1 : to.row + 1;
               const rook = draft.board[rookFromRow][from.col]?.piece;
@@ -226,11 +238,6 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
           const eliminatedPlayerId = capturedPiece.player;
           if(!draft.eliminatedPlayerIds.includes(eliminatedPlayerId)) {
             draft.eliminatedPlayerIds.push(eliminatedPlayerId);
-            toast({
-              title: "Player Eliminated!",
-              description: `${players.find(p => p.id === eliminatedPlayerId)?.name} has been eliminated.`,
-              variant: "destructive",
-            });
             for (let r = 0; r < 14; r++) {
               for (let c = 0; c < 14; c++) {
                 if (draft.board[r][c].piece && draft.board[r][c].piece!.player === eliminatedPlayerId) {
@@ -241,14 +248,17 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
           }
         }
 
-        const activePlayers = players.filter(p => !draft.eliminatedPlayerIds.includes(p.id));
-        if (activePlayers.length <= 1) {
-            draft.winner = activePlayers[0]?.id || null;
+        const joinedAndActivePlayers = draft.players.filter(p => 
+            !draft.eliminatedPlayerIds.includes(p.id) && playersMap[p.id]
+        );
+
+        if (joinedAndActivePlayers.length <= 1) {
+            draft.winner = joinedAndActivePlayers[0]?.id || null;
         } else {
-            let nextPlayerIndex = (draft.currentPlayerIndex + 1) % players.length;
-            while (draft.eliminatedPlayerIds.includes(players[nextPlayerIndex].id) || !playersMap[players[nextPlayerIndex].id]) {
-                nextPlayerIndex = (nextPlayerIndex + 1) % players.length;
-            }
+            let nextPlayerIndex = draft.currentPlayerIndex;
+            do {
+                nextPlayerIndex = (nextPlayerIndex + 1) % draft.players.length;
+            } while (!playersMap[draft.players[nextPlayerIndex].id] || draft.eliminatedPlayerIds.includes(draft.players[nextPlayerIndex].id));
             draft.currentPlayerIndex = nextPlayerIndex;
         }
     });
@@ -263,14 +273,6 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
   
   const onRestart = () => {
     toast({ title: "Restart not implemented in multiplayer yet." });
-  }
-
-  const handleUndo = () => {
-     toast({ title: "Undo not implemented in multiplayer yet." });
-  }
-  
-  const handleRedo = () => {
-     toast({ title: "Redo not implemented in multiplayer yet." });
   }
 
   return (
@@ -292,10 +294,6 @@ export default function Game({ gameId, initialGameState, playersMap, currentUser
           eliminatedPlayers={eliminatedPlayerIds.map(id => players.find(p => p.id === id)!)}
           winner={winner ? players.find(p => p.id === winner)! : null}
           onRestart={onRestart}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={false}
-          canRedo={false}
           capturedPieces={capturedPieces}
           players={players}
         />

@@ -1,12 +1,12 @@
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser } from '@/firebase/auth/use-user';
+import { useFirestore } from '@/firebase/provider';
 import { ReactNode, useEffect } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 
 const PROTECTED_ROUTES = ['/', '/game'];
-const PUBLIC_ROUTES = ['/login', '/create-profile'];
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useUser();
@@ -21,17 +21,25 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     
     if (!user && isProtectedRoute) {
       router.replace('/login');
+      return;
     }
 
     if (user) {
-      const userDocRef = doc(firestore, 'users', user.uid);
-      getDoc(userDocRef).then(userDoc => {
-        if (!userDoc.exists() && pathname !== '/create-profile') {
-          router.replace('/create-profile');
-        } else if (userDoc.exists() && (pathname === '/login' || pathname === '/create-profile')) {
-          router.replace('/');
-        }
-      });
+      if (pathname === '/login' || pathname === '/create-profile') {
+        const userDocRef = doc(firestore, 'users', user.uid);
+        getDoc(userDocRef).then(userDoc => {
+          if (userDoc.exists()) {
+            router.replace('/');
+          }
+        });
+      } else {
+        const userDocRef = doc(firestore, 'users', user.uid);
+        getDoc(userDocRef).then(userDoc => {
+          if (!userDoc.exists()) {
+            router.replace('/create-profile');
+          }
+        });
+      }
     }
 
   }, [user, loading, pathname, router, firestore]);
@@ -44,14 +52,24 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
       )
   }
 
-  // Prevent flicker
+  // Prevent flicker on protected routes
   if (!user && (PROTECTED_ROUTES.some(route => pathname.startsWith(route)) || pathname === '/')) {
       return (
           <div className="flex min-h-screen items-center justify-center">
-              <p>Loading...</p>
+              <p>Authenticating...</p>
           </div>
       )
   }
+  
+  // Prevent flicker on public routes when logged in
+  if (user && (pathname === '/login' || pathname === '/create-profile')) {
+       return (
+          <div className="flex min-h-screen items-center justify-center">
+              <p>Redirecting...</p>
+          </div>
+      )
+  }
+
 
   return <>{children}</>;
 }
