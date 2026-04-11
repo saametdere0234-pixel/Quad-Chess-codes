@@ -7,5 +7,6 @@ export const firebaseConfig = {
   projectId: "studio-3262291216-4a495",
   storageBucket: "studio-3262291216-4a495.appspot.com",
   messagingSenderId: "587821173783",
-  appId: "1:587821173783:web:9eda17f364240ae0976052"
+  appId: "1:587821173783:web:9eda17f364240ae0976052",
+  databaseURL: "https://studio-3262291216-4a495-default-rtdb.firebaseio.com"
 };

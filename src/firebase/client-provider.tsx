@@ -12,7 +12,7 @@ export function FirebaseClientProvider({ children }: { children: ReactNode }) {
             return initializeFirebase();
         }
         // On the server, we return nulls. Components should handle this gracefully.
-        return { firebaseApp: null, auth: null, firestore: null };
+        return { firebaseApp: null, auth: null, database: null };
     }, []);
 
     return (

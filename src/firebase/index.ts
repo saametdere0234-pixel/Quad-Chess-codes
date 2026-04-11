@@ -1,29 +1,29 @@
 import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
 import { getAuth, type Auth } from 'firebase/auth';
-import { getFirestore, type Firestore } from 'firebase/firestore';
+import { getDatabase, type Database } from 'firebase/database';
 import { firebaseConfig } from './config';
 
 let firebaseApp: FirebaseApp;
 let auth: Auth;
-let firestore: Firestore;
+let database: Database;
 
 export function initializeFirebase() {
   if (typeof window !== 'undefined') {
     if (!getApps().length) {
       firebaseApp = initializeApp(firebaseConfig);
       auth = getAuth(firebaseApp);
-      firestore = getFirestore(firebaseApp);
+      database = getDatabase(firebaseApp);
     } else {
       firebaseApp = getApp();
       auth = getAuth(firebaseApp);
-      firestore = getFirestore(firebaseApp);
+      database = getDatabase(firebaseApp);
     }
   }
   
   return {
     firebaseApp,
     auth,
-    firestore,
+    database,
   };
 }
 

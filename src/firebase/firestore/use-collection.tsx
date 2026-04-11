@@ -1,34 +1,32 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type {
-  Query,
-  DocumentData,
-  CollectionReference,
-} from 'firebase/firestore';
-import { onSnapshot } from 'firebase/firestore';
+import type { Query } from 'firebase/database';
+import { onValue } from 'firebase/database';
 
-export const useCollection = <T extends DocumentData>(
-  ref: Query<T> | CollectionReference<T> | null
-) => {
+export const useCollection = <T,>(query: Query | null) => {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    if (!ref) {
+    if (!query) {
       setData(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    const unsubscribe = onSnapshot(
-      ref,
+    const unsubscribe = onValue(
+      query,
       (snapshot) => {
-        const result: T[] = [];
-        snapshot.forEach((doc) => result.push({ ...doc.data(), id: doc.id }));
-        setData(result);
+        const val = snapshot.val();
+        if (val) {
+          const list: T[] = Object.keys(val).map(key => ({ ...val[key], id: key }));
+          setData(list);
+        } else {
+          setData([]);
+        }
         setLoading(false);
         setError(null);
       },
@@ -41,7 +39,7 @@ export const useCollection = <T extends DocumentData>(
     );
 
     return () => unsubscribe();
-  }, [ref]);
+  }, [query]);
 
   return { data, loading, error };
 };

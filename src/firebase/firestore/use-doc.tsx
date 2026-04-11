@@ -1,12 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { DocumentReference, DocumentData } from 'firebase/firestore';
-import { onSnapshot } from 'firebase/firestore';
+import type { DatabaseReference } from 'firebase/database';
+import { onValue } from 'firebase/database';
 
-export const useDoc = <T extends DocumentData>(
-  ref: DocumentReference<T> | null
-) => {
+export const useDoc = <T,>(ref: DatabaseReference | null) => {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -18,10 +16,11 @@ export const useDoc = <T extends DocumentData>(
       return;
     }
     setLoading(true);
-    const unsubscribe = onSnapshot(
+    const unsubscribe = onValue(
       ref,
       (snapshot) => {
-        setData(snapshot.exists() ? ({ ...snapshot.data(), id: snapshot.id } as T) : null);
+        const val = snapshot.val();
+        setData(val ? { ...val, id: snapshot.key } as T : null);
         setLoading(false);
         setError(null);
       },

@@ -9,8 +9,8 @@ import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board, PieceType, Player } from '@/lib/game/types';
 import { BOARD_SIZE, PLAYERS } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast";
-import { useDoc, useFirestore } from '@/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { useDoc, useDatabase } from '@/firebase';
+import { ref, update } from 'firebase/database';
 import { getLocalUser } from '@/lib/user';
 import { useRouter } from 'next/navigation';
 
@@ -74,12 +74,12 @@ interface GameProps {
 
 export default function Game({ isMultiplayer = false, roomId }: GameProps) {
   const router = useRouter();
-  const firestore = useFirestore();
+  const database = useDatabase();
   const { userId } = getLocalUser();
 
   const roomRef = useMemo(() => 
-    isMultiplayer && firestore && roomId ? doc(firestore, 'rooms', roomId) : null
-  , [isMultiplayer, firestore, roomId]);
+    isMultiplayer && database && roomId ? ref(database, 'rooms/' + roomId) : null
+  , [isMultiplayer, database, roomId]);
   
   const { data: roomData, loading: roomLoading } = useDoc(roomRef);
 
@@ -101,8 +101,9 @@ export default function Game({ isMultiplayer = false, roomId }: GameProps) {
   
   const players = useMemo<Player[]>(() => {
     if (isMultiplayer && roomData?.players) {
+        const roomPlayers = Object.values(roomData.players) as any[];
         return PLAYERS.map(basePlayer => {
-            const roomPlayer = roomData.players.find((p: any) => p.playerId === basePlayer.id);
+            const roomPlayer = roomPlayers.find(p => p.playerId === basePlayer.id);
             return roomPlayer ? { ...basePlayer, name: roomPlayer.nickname } : basePlayer;
         });
     }
@@ -110,7 +111,7 @@ export default function Game({ isMultiplayer = false, roomId }: GameProps) {
   }, [isMultiplayer, roomData?.players]);
   
   const userPlayerInfo = useMemo(() => 
-    isMultiplayer && roomData ? roomData.players.find((p: any) => p.userId === userId) : null
+    isMultiplayer && roomData?.players ? roomData.players[userId] : null
   , [isMultiplayer, roomData, userId]);
   
   const currentUserPlayerId: PlayerId = useMemo(() => {
@@ -180,7 +181,7 @@ export default function Game({ isMultiplayer = false, roomId }: GameProps) {
 
   const updateGameState = useCallback(async (nextState: GameState) => {
     if (isMultiplayer && roomRef) {
-      await updateDoc(roomRef, { gameState: JSON.stringify(nextState) });
+      await update(roomRef, { gameState: JSON.stringify(nextState) });
     } else {
       const newHistory = localHistory.slice(0, localHistoryIndex + 1);
       setLocalHistory([...newHistory, nextState]);

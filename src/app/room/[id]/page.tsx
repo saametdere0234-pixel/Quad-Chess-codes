@@ -2,8 +2,8 @@
 
 import { useMemo, useEffect } from 'react';
 import Game from '@/components/game/Game';
-import { useFirestore, useDoc } from '@/firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { useDatabase, useDoc } from '@/firebase';
+import { ref, update, runTransaction } from 'firebase/database';
 import { useParams, useRouter } from 'next/navigation';
 import { getLocalUser } from '@/lib/user';
 import { PLAYER_IDS, PLAYERS } from '@/lib/game/constants';
@@ -13,7 +13,7 @@ import { Loader2, Users } from 'lucide-react';
 export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
-  const firestore = useFirestore();
+  const database = useDatabase();
   const { userId, nickname } = getLocalUser();
 
   const roomId = useMemo(() => 
@@ -21,52 +21,63 @@ export default function RoomPage() {
   , [params.id]);
   
   const roomRef = useMemo(() => 
-    firestore && roomId ? doc(firestore, 'rooms', roomId) : null
-  , [firestore, roomId]);
+    database && roomId ? ref(database, 'rooms/' + roomId) : null
+  , [database, roomId]);
   
   const { data: roomData, loading: roomLoading } = useDoc(roomRef);
 
-  useEffect(() => {
-    if (roomLoading || !firestore || !roomRef || !userId || !nickname) return;
+  const playersArray = useMemo(() => roomData?.players ? Object.values(roomData.players) : [], [roomData]);
 
-    // Room doesn't exist, redirect
+  useEffect(() => {
+    if (roomLoading || !database || !roomRef || !userId || !nickname) return;
+
     if (!roomData) {
       alert('Room not found. You will be redirected to the lobby.');
       router.push('/lobby');
       return;
     }
+    
+    const userInRoom = roomData.players && roomData.players[userId];
 
-    const userInRoom = roomData.players.some((p: any) => p.userId === userId);
-
-    // If user is not in the room, try to join
     if (!userInRoom) {
       if (roomData.status !== 'waiting') {
         alert('This game has already started. You will be redirected to the lobby.');
         router.push('/lobby');
         return;
       }
-      if (roomData.players.length >= 4) {
-        alert('This room is full. You will be redirected to the lobby.');
-        router.push('/lobby');
-        return;
-      }
-      
-      const assignedPlayerId = PLAYER_IDS[roomData.players.length];
-      updateDoc(roomRef, {
-        players: arrayUnion({ userId, nickname, playerId: assignedPlayerId })
+
+      runTransaction(roomRef, (currentData) => {
+        if (currentData) {
+          const players = currentData.players || {};
+          if (Object.keys(players).length < 4) {
+             const assignedPlayerId = PLAYER_IDS[Object.keys(players).length];
+             if (!players[userId]) {
+                players[userId] = { userId, nickname, playerId: assignedPlayerId };
+             }
+             currentData.players = players;
+          } else {
+            return;
+          }
+        }
+        return currentData;
+      }).then(({ committed }) => {
+        if (!committed) {
+             alert('This room is full. You will be redirected to the lobby.');
+             router.push('/lobby');
+        }
       }).catch(error => {
         console.error("Error joining room:", error);
         alert("There was an error trying to join the room.");
         router.push('/lobby');
       });
     }
-  }, [roomLoading, roomData, firestore, roomRef, userId, nickname, router]);
+  }, [roomLoading, roomData, database, roomRef, userId, nickname, router]);
 
 
   const handleStartGame = async () => {
     if (!roomRef) return;
     try {
-        await updateDoc(roomRef, { status: 'in-progress' });
+        await update(roomRef, { status: 'in-progress' });
     } catch (error) {
         console.error("Error starting game:", error);
         alert("Could not start the game.");
@@ -82,9 +93,9 @@ export default function RoomPage() {
     );
   }
 
-  const userInRoom = roomData.players.some((p: any) => p.userId === userId);
-  // The host is always the first player in the array
-  const isHost = roomData.players[0]?.userId === userId;
+  const userInRoom = roomData.players && roomData.players[userId];
+  const sortedPlayers = Object.values(roomData.players || {}).sort((a: any, b: any) => PLAYER_IDS.indexOf(a.playerId) - PLAYER_IDS.indexOf(b.playerId));
+  const isHost = sortedPlayers[0]?.userId === userId;
 
   if (roomData.status === 'waiting') {
     return (
@@ -93,12 +104,12 @@ export default function RoomPage() {
         <p className="text-muted-foreground mb-6">Room ID: <span className='font-mono p-1 bg-muted rounded'>{roomData.id}</span></p>
         
         <div className="w-full max-w-md bg-card p-6 rounded-lg shadow-sm mb-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center justify-center"><Users className="mr-2"/> Players ({roomData.players.length}/4)</h2>
+          <h2 className="text-xl font-semibold mb-4 flex items-center justify-center"><Users className="mr-2"/> Players ({playersArray.length}/4)</h2>
           <ul className="space-y-2">
-            {PLAYERS.slice(0, roomData.players.length).map((playerInfo, index) => {
-               const p = roomData.players[index];
+            {sortedPlayers.map((p: any) => {
+               const playerInfo = PLAYERS.find(pi => pi.id === p.playerId);
                return (
-                <li key={p.userId} className="flex items-center justify-center text-lg">
+                 playerInfo && <li key={p.userId} className="flex items-center justify-center text-lg">
                     <span 
                       className="font-semibold" 
                       style={{color: playerInfo.color}}
@@ -113,8 +124,8 @@ export default function RoomPage() {
         </div>
         
         {isHost && userInRoom && (
-          <Button onClick={handleStartGame} disabled={roomData.players.length < 2}>
-            Start Game ({roomData.players.length} players)
+          <Button onClick={handleStartGame} disabled={playersArray.length < 2}>
+            Start Game ({playersArray.length} players)
           </Button>
         )}
         {!userInRoom && (
