@@ -15,8 +15,14 @@ export default function RoomPage() {
   const params = useParams();
   const router = useRouter();
   const database = useDatabase();
-  const { userId, nickname } = getLocalUser();
+  const [user, setUser] = useState<{ userId: string | null; nickname: string | null }>({ userId: null, nickname: null });
   const [userRole, setUserRole] = useState<'joining' | 'player'>('joining');
+
+  useEffect(() => {
+    setUser(getLocalUser());
+  }, []);
+  
+  const { userId, nickname } = user;
 
   const roomId = useMemo(() => 
     (Array.isArray(params.id) ? params.id[0] : params.id || '').toUpperCase()
@@ -179,7 +185,7 @@ export default function RoomPage() {
   }, [handleLeaveRoom]);
 
 
-  if (roomLoading || !roomData || userRole === 'joining') {
+  if (roomLoading || !roomData || userRole === 'joining' || !userId) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

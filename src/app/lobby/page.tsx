@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useDatabase } from '@/firebase';
 import { ref, serverTimestamp, query, set, limitToLast, orderByChild } from 'firebase/database';
@@ -21,8 +21,14 @@ function generateRoomCode() {
 export default function LobbyPage() {
   const router = useRouter();
   const database = useDatabase();
-  const { nickname, userId } = getLocalUser();
+  const [user, setUser] = useState<{ userId: string | null; nickname: string | null }>({ userId: null, nickname: null });
   const [joinCode, setJoinCode] = useState('');
+
+  useEffect(() => {
+    setUser(getLocalUser());
+  }, []);
+
+  const { nickname, userId } = user;
 
   const roomsRef = useMemo(() => database ? ref(database, 'rooms') : null, [database]);
   
