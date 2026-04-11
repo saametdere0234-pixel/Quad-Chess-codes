@@ -1,8 +1,6 @@
 {
   "rules": {
-    "rooms": {
-      ".read": true,
-      ".write": true
-    }
+    ".read": true,
+    ".write": true
   }
 }
