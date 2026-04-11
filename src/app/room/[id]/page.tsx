@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useCallback } from 'react';
 import Game from '@/components/game/Game';
 import { useDatabase, useDoc } from '@/firebase';
-import { ref, update, runTransaction } from 'firebase/database';
+import { ref, update, runTransaction, remove } from 'firebase/database';
 import { useParams, useRouter } from 'next/navigation';
 import { getLocalUser } from '@/lib/user';
 import { PLAYER_IDS, PLAYERS } from '@/lib/game/constants';
@@ -71,7 +71,7 @@ export default function RoomPage() {
         router.push('/lobby');
       });
     }
-  }, [roomLoading, roomData, database, roomRef, userId, nickname, router]);
+  }, [roomLoading, roomData, database, roomRef, userId, nickname, router, roomId]);
 
 
   const handleStartGame = async () => {
@@ -84,6 +84,39 @@ export default function RoomPage() {
     }
   }
 
+  const handleLeaveRoom = useCallback(() => {
+    if (!roomRef || !userId) return;
+
+    runTransaction(roomRef, (currentData) => {
+        if (currentData) {
+            if (currentData.players && currentData.players[userId]) {
+                delete currentData.players[userId];
+            }
+            // If no players are left, delete the room
+            if (!currentData.players || Object.keys(currentData.players).length === 0) {
+                return null; // Returning null from a transaction deletes the data
+            }
+        }
+        return currentData;
+    }).then(() => {
+        router.push('/lobby');
+    }).catch(error => {
+        console.error("Error leaving room:", error);
+        alert("There was an error trying to leave the room.");
+    });
+}, [roomRef, userId, router]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        handleLeaveRoom();
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+        window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [handleLeaveRoom]);
+
+
   if (roomLoading || !roomData) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
@@ -93,9 +126,10 @@ export default function RoomPage() {
     );
   }
 
-  const userInRoom = roomData.players && roomData.players[userId];
   const sortedPlayers = Object.values(roomData.players || {}).sort((a: any, b: any) => PLAYER_IDS.indexOf(a.playerId) - PLAYER_IDS.indexOf(b.playerId));
   const isHost = sortedPlayers[0]?.userId === userId;
+  const userInRoom = roomData.players && roomData.players[userId];
+
 
   if (roomData.status === 'waiting') {
     return (
@@ -145,7 +179,7 @@ export default function RoomPage() {
         <h1 className="text-4xl font-bold text-center mb-2 font-headline text-primary">
           {roomData.name}
         </h1>
-        <Game isMultiplayer={true} roomId={roomId} />
+        <Game roomId={roomId} onLeaveRoom={handleLeaveRoom} />
       </div>
     </main>
   );

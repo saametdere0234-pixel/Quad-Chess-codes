@@ -107,25 +107,34 @@ export const getValidMoves = (row: number, col: number, gameState: GameState): {
 
       // One step forward
       const oneStep = { row: row + forwardDir.r, col: col + forwardDir.c };
-      const oneStepSquare = isWithinBounds(oneStep.row, oneStep.col) ? board[oneStep.row][oneStep.col] : undefined;
-      if (oneStepSquare?.isActive && !oneStepSquare.piece) {
-        moves.push(oneStep);
-        
-        // Two steps forward
-        if (!piece.hasMoved) {
-            const twoSteps = { row: row + 2 * forwardDir.r, col: col + 2 * forwardDir.c };
-            const twoStepsSquare = isWithinBounds(twoSteps.row, twoSteps.col) ? board[twoSteps.row][twoSteps.col] : undefined;
-            if (twoStepsSquare?.isActive && !twoStepsSquare.piece && oneStepSquare.isActive && !oneStepSquare.piece) {
-                moves.push(twoSteps);
-            }
+      if (isWithinBounds(oneStep.row, oneStep.col)) {
+        const oneStepSquare = board[oneStep.row][oneStep.col];
+        if (oneStepSquare?.isActive && !oneStepSquare.piece) {
+          moves.push(oneStep);
+          
+          // Two steps forward
+          if (!piece.hasMoved) {
+              const twoSteps = { row: row + 2 * forwardDir.r, col: col + 2 * forwardDir.c };
+              if(isWithinBounds(twoSteps.row, twoSteps.col)){
+                  const twoStepsSquare = board[twoSteps.row][twoSteps.col];
+                  if (twoStepsSquare?.isActive && !twoStepsSquare.piece) {
+                      moves.push(twoSteps);
+                  }
+              }
+          }
         }
       }
+      
 
       // Captures
       for (const capDir of captureDirs) {
-        const captureSquare = isWithinBounds(row + capDir.r, col + capDir.c) ? board[row + capDir.r][col + capDir.c] : undefined;
-        if (captureSquare?.isActive && captureSquare.piece && captureSquare.piece.player !== player) {
-          moves.push({ row: row + capDir.r, col: col + capDir.c });
+        const newRow = row + capDir.r;
+        const newCol = col + capDir.c;
+        if(isWithinBounds(newRow, newCol)) {
+            const captureSquare = board[newRow][newCol];
+            if (captureSquare?.isActive && captureSquare.piece && captureSquare.piece.player !== player) {
+              moves.push({ row: newRow, col: newCol });
+            }
         }
       }
       

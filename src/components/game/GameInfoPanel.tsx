@@ -4,24 +4,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Crown, Swords, RefreshCw, Box, Undo, Redo, LogOut } from 'lucide-react';
+import { Crown, Swords, Box, LogOut, Undo, Redo } from 'lucide-react';
 import type { Player, Piece, PlayerId } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS } from '@/lib/game/constants';
 import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
-
 
 interface GameInfoPanelProps {
   currentPlayer: Player;
   eliminatedPlayers: Player[];
   winner: Player | null;
-  onRestart: () => void;
+  onLeaveRoom: () => void;
   capturedPieces: { [key in PlayerId]?: Piece[] };
   players: Player[];
-  onUndo: () => void;
-  onRedo: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
   isMultiplayer?: boolean;
   roomName?: string;
 }
@@ -49,17 +43,12 @@ export default function GameInfoPanel({
   currentPlayer,
   eliminatedPlayers,
   winner,
-  onRestart,
+  onLeaveRoom,
   capturedPieces,
   players,
-  onUndo,
-  onRedo,
-  canUndo,
-  canRedo,
   isMultiplayer,
   roomName,
 }: GameInfoPanelProps) {
-  const router = useRouter();
   const activePlayers = players.filter(p => !eliminatedPlayers.find(ep => ep.id === p.id));
 
   return (
@@ -69,14 +58,14 @@ export default function GameInfoPanel({
           <CardTitle className="flex items-center justify-between">
             <span>{isMultiplayer ? 'Multiplayer Game' : 'Local Game'}</span>
             <div className='flex items-center space-x-1'>
-                <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo move">
+                <Button variant="ghost" size="icon" disabled={true} aria-label="Undo move">
                     <Undo className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo move">
+                <Button variant="ghost" size="icon" disabled={true} aria-label="Redo move">
                     <Redo className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={onRestart} aria-label={isMultiplayer ? "Leave Room" : "Restart Game"}>
-                  {isMultiplayer ? <LogOut className="h-5 w-5" /> : <RefreshCw className="h-5 w-5" />}
+                <Button variant="ghost" size="icon" onClick={onLeaveRoom} aria-label="Leave Room">
+                   <LogOut className="h-5 w-5" />
                 </Button>
             </div>
           </CardTitle>
@@ -91,7 +80,7 @@ export default function GameInfoPanel({
               </h3>
             </div>
           ) : (
-            <div>
+             currentPlayer && <div>
               <p className="text-sm text-muted-foreground mb-1">Current Turn:</p>
               <div className="flex items-center space-x-2">
                 <div
