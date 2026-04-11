@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useDoc, useDatabase } from '@/firebase';
 import { ref, update } from 'firebase/database';
 import { getLocalUser } from '@/lib/user';
+import { Loader2 } from 'lucide-react';
+
 
 function getRotatedBoard(board: Board, playerId: PlayerId): Board {
     const size = board.length;
@@ -42,9 +44,9 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
     if (row === -1 || col === -1) return {row, col};
     switch (playerId) {
         case 'Red': return { row, col }; // 0 deg, bottom -> bottom
-        case 'Green': return { row: col, col: size - 1 - row }; // 90 deg CW, right -> bottom
+        case 'Green': return { row: size - 1 - col, col: row }; // 270 deg CW, right -> bottom
         case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg, top -> bottom
-        case 'Yellow': return { row: size - 1 - col, col: row }; // 270 deg CW, left -> bottom
+        case 'Yellow': return { row: col, col: size - 1 - row }; // 90 deg CW, left -> bottom
         default: return { row, col };
     }
 }
@@ -53,33 +55,18 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
 interface GameProps {
   roomId: string;
   onLeaveRoom: () => void;
+  userRole: 'player' | 'spectator' | 'joining';
+  roomData: any; 
 }
 
-export default function Game({ roomId, onLeaveRoom }: GameProps) {
-  const database = useDatabase();
+export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GameProps) {
   const { userId } = getLocalUser();
-
-  const roomRef = useMemo(() => 
-    database && roomId ? ref(database, 'rooms/' + roomId) : null
-  , [database, roomId]);
-  
-  const { data: roomData, loading: roomLoading } = useDoc(roomRef);
+  const { toast } = useToast();
 
   const gameState = useMemo<GameState | null>(() => {
     if (roomData?.gameState) {
         try {
-            const parsedState = JSON.parse(roomData.gameState) as GameState;
-            if (!parsedState.players || parsedState.players.length === 0) {
-                 const roomPlayers = roomData.players ? (Object.values(roomData.players) as any[]) : [];
-                 const sortedPlayers = roomPlayers.sort((a: any, b: any) => PLAYER_IDS.indexOf(a.playerId) - PLAYER_IDS.indexOf(b.playerId));
-
-                 parsedState.players = sortedPlayers.map((p: any) => ({
-                    id: p.playerId,
-                    name: p.nickname,
-                    color: PLAYERS.find(pl => pl.id === p.playerId)!.color
-                }));
-            }
-            return parsedState;
+            return JSON.parse(roomData.gameState) as GameState;
         } catch (e) {
             console.error("Failed to parse game state:", e);
             return null;
@@ -90,7 +77,6 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
 
   const [selectedSquare, setSelectedSquare] = useState<{ row: number; col: number } | null>(null);
   const [promotionMove, setPromotionMove] = useState<{ from: { row: number; col: number }; to: { row: number; col: number } } | null>(null);
-  const { toast } = useToast();
   
   const prevEliminatedPlayerIdsRef = useRef<PlayerId[]>([]);
     
@@ -98,9 +84,24 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     roomData?.players ? roomData.players[userId] : null
   , [roomData, userId]);
   
-  const currentUserPlayerId: PlayerId = useMemo(() => {
-    return userPlayerInfo?.playerId || 'Red';
-  }, [userPlayerInfo]);
+  const isEliminated = useMemo(() => {
+    if (!gameState || !userPlayerInfo) return false;
+    return gameState.eliminatedPlayerIds.includes(userPlayerInfo.playerId);
+  }, [gameState, userPlayerInfo]);
+
+  const isSpectator = userRole === 'spectator' || isEliminated;
+  const isPlayer = userRole === 'player' && !isEliminated;
+
+  const defaultPerspective: PlayerId = useMemo(() => userPlayerInfo?.playerId || 'Red', [userPlayerInfo]);
+  const [perspective, setPerspective] = useState<PlayerId>('Red');
+
+  useEffect(() => {
+    if (defaultPerspective) {
+      setPerspective(defaultPerspective);
+    }
+  }, [defaultPerspective]);
+  
+  const perspectiveToUse = isSpectator ? perspective : defaultPerspective;
 
   useEffect(() => {
     if (gameState && gameState.players.length > 0) {
@@ -134,38 +135,37 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
 
   useEffect(() => {
     setSelectedSquare(null);
-  }, [gameState?.currentPlayerIndex]);
+  }, [gameState?.currentPlayerIndex, perspectiveToUse]);
 
   const validMoves = useMemo(() => {
     if (!selectedSquare || !gameState) return [];
     const moves = getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
-    return moves.map(move => getRotatedCoords(move.row, move.col, currentUserPlayerId, BOARD_SIZE));
-  }, [selectedSquare, gameState, currentUserPlayerId]);
+    return moves.map(move => getRotatedCoords(move.row, move.col, perspectiveToUse, BOARD_SIZE));
+  }, [selectedSquare, gameState, perspectiveToUse]);
 
   const displayBoard = useMemo(() => {
     if (!gameState) return createInitialBoard();
-    return getRotatedBoard(gameState.board, currentUserPlayerId)
-  }, [gameState, currentUserPlayerId]);
+    return getRotatedBoard(gameState.board, perspectiveToUse);
+  }, [gameState, perspectiveToUse]);
   
   const displaySelectedSquare = useMemo(() => {
     if (!selectedSquare) return null;
-    return getRotatedCoords(selectedSquare.row, selectedSquare.col, currentUserPlayerId, BOARD_SIZE);
-  }, [selectedSquare, currentUserPlayerId]);
+    return getRotatedCoords(selectedSquare.row, selectedSquare.col, perspectiveToUse, BOARD_SIZE);
+  }, [selectedSquare, perspectiveToUse]);
 
   const displayLastMove = useMemo(() => {
       if (!gameState?.lastMove) return null;
       return {
-          from: getRotatedCoords(gameState.lastMove.from.row, gameState.lastMove.from.col, currentUserPlayerId, BOARD_SIZE),
-          to: getRotatedCoords(gameState.lastMove.to.row, gameState.lastMove.to.col, currentUserPlayerId, BOARD_SIZE),
+          from: getRotatedCoords(gameState.lastMove.from.row, gameState.lastMove.from.col, perspectiveToUse, BOARD_SIZE),
+          to: getRotatedCoords(gameState.lastMove.to.row, gameState.lastMove.to.col, perspectiveToUse, BOARD_SIZE),
       }
-  }, [gameState?.lastMove, currentUserPlayerId]);
+  }, [gameState?.lastMove, perspectiveToUse]);
 
   const updateGameState = useCallback(async (nextState: GameState) => {
-    if (roomRef) {
-      await update(roomRef, { gameState: JSON.stringify(nextState) });
-    }
+    const roomRef = ref(getDatabase(), 'rooms/' + roomId);
+    await update(roomRef, { gameState: JSON.stringify(nextState) });
     setSelectedSquare(null);
-  }, [roomRef]);
+  }, [roomId]);
   
   const applyMove = useCallback((from: { row: number, col: number }, to: { row: number, col: number }, promotionPieceType: PieceType | null = null) => {
     if (!gameState) return;
@@ -294,13 +294,15 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
 
   const handleSquareClick = useCallback((row: number, col: number) => {
     if (!gameState || gameState.winner || promotionMove || !userPlayerInfo || gameState.players.length === 0) return;
+    
+    if(!isPlayer) return;
 
     if(gameState.players[gameState.currentPlayerIndex].id !== userPlayerInfo.playerId) {
       toast({ title: "Not your turn!", description: "Please wait for your opponent to move.", variant: 'destructive'});
       return;
     }
 
-    const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, currentUserPlayerId, BOARD_SIZE);
+    const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, perspectiveToUse, BOARD_SIZE);
     
     const clickedSquare = gameState.board[originalRow][originalCol];
     
@@ -316,7 +318,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     } else {
       setSelectedSquare(null);
     }
-  }, [gameState, promotionMove, userPlayerInfo, toast, currentUserPlayerId, selectedSquare, handleAttemptMove]);
+  }, [gameState, promotionMove, userPlayerInfo, toast, perspectiveToUse, selectedSquare, handleAttemptMove, isPlayer]);
 
   const handlePromotionSelect = (pieceType: PieceType) => {
     if (!promotionMove) return;
@@ -324,17 +326,21 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     setPromotionMove(null);
   };
   
-  if (roomLoading || !gameState || !gameState.players || gameState.players.length === 0) {
-    return <div className="flex items-center justify-center h-full">Loading game...</div>;
+  if (!gameState || !gameState.players || gameState.players.length === 0) {
+    return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /> Loading game...</div>;
   }
 
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const eliminatedPlayers = gameState.players.filter(p => gameState.eliminatedPlayerIds.includes(p.id));
   const winner = gameState.players.find(p => p.id === gameState.winner);
+  const spectators = roomData?.spectators ? Object.values(roomData.spectators) : [];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
       <div className="md:col-span-2">
+        <h1 className="text-3xl font-bold text-center mb-4 text-primary">
+          {roomData.name}
+        </h1>
         <ChessBoard
           board={displayBoard}
           onSquareClick={handleSquareClick}
@@ -351,8 +357,10 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
           onLeaveRoom={onLeaveRoom}
           capturedPieces={gameState.capturedPieces}
           players={gameState.players}
-          isMultiplayer={true}
-          roomName={roomData?.name}
+          isSpectator={isSpectator}
+          onPerspectiveChange={setPerspective}
+          currentPerspective={perspectiveToUse}
+          spectators={spectators}
         />
       </div>
       {promotionMove && currentPlayer && (

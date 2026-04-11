@@ -4,9 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Crown, Swords, Box, LogOut, Undo, Redo } from 'lucide-react';
+import { Crown, Swords, Box, LogOut, Undo, Redo, Users, Tv } from 'lucide-react';
 import type { Player, Piece, PlayerId } from '@/lib/game/types';
-import { PIECE_EMOJIS, PLAYERS } from '@/lib/game/constants';
+import { PIECE_EMOJIS, PLAYERS, PLAYER_IDS } from '@/lib/game/constants';
 import { cn } from '@/lib/utils';
 
 interface GameInfoPanelProps {
@@ -16,8 +16,10 @@ interface GameInfoPanelProps {
   onLeaveRoom: () => void;
   capturedPieces: { [key in PlayerId]?: Piece[] };
   players: Player[];
-  isMultiplayer?: boolean;
-  roomName?: string;
+  isSpectator: boolean;
+  onPerspectiveChange: (playerId: PlayerId) => void;
+  currentPerspective: PlayerId;
+  spectators: { userId: string, nickname: string }[];
 }
 
 const CapturedPiece = ({ piece }: { piece: Piece }) => {
@@ -46,8 +48,10 @@ export default function GameInfoPanel({
   onLeaveRoom,
   capturedPieces,
   players,
-  isMultiplayer,
-  roomName,
+  isSpectator,
+  onPerspectiveChange,
+  currentPerspective,
+  spectators,
 }: GameInfoPanelProps) {
   const activePlayers = players.filter(p => !eliminatedPlayers.find(ep => ep.id === p.id));
 
@@ -56,7 +60,7 @@ export default function GameInfoPanel({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>{isMultiplayer ? 'Multiplayer Game' : 'Local Game'}</span>
+            <span>Game Info</span>
             <div className='flex items-center space-x-1'>
                 <Button variant="ghost" size="icon" disabled={true} aria-label="Undo move">
                     <Undo className="h-5 w-5" />
@@ -69,7 +73,6 @@ export default function GameInfoPanel({
                 </Button>
             </div>
           </CardTitle>
-          {isMultiplayer && roomName && <CardDescription>Room: {roomName}</CardDescription>}
         </CardHeader>
         <CardContent>
           {winner ? (
@@ -115,6 +118,53 @@ export default function GameInfoPanel({
         </CardContent>
       </Card>
       
+      {isSpectator && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center"><Tv className="mr-2 h-5 w-5" />Spectator View</CardTitle>
+            <CardDescription>You are watching. Rotate the board to change your view.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid grid-cols-2 gap-2">
+            {PLAYER_IDS.map(playerId => (
+              <Button
+                key={playerId}
+                variant={currentPerspective === playerId ? 'default' : 'outline'}
+                onClick={() => onPerspectiveChange(playerId)}
+                size="sm"
+                className="flex justify-start items-center gap-2"
+              >
+                <div className="w-3 h-3 rounded-full" style={{backgroundColor: PLAYERS.find(p => p.id === playerId)!.color}}/>
+                View as {playerId}
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+      
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Users className="h-5 w-5 mr-2" />
+            Spectators ({spectators.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+            <ScrollArea className="h-24">
+                {spectators.length > 0 ? (
+                  <ul className="space-y-2 text-sm text-muted-foreground">
+                      {spectators.map((s: any) => (
+                          <li key={s.userId} className="flex items-center">
+                              {s.nickname}
+                          </li>
+                      ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">No spectators yet.</p>
+                )}
+            </ScrollArea>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -125,7 +175,7 @@ export default function GameInfoPanel({
         <CardContent>
             <ScrollArea className="h-48">
                 <div className='space-y-3'>
-                {activePlayers.map(player => (
+                {players.map(player => (
                     <div key={player.id}>
                         <div className="flex items-center space-x-2 mb-1">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: player.color }}/>

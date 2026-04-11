@@ -11,7 +11,7 @@ import { getLocalUser } from '@/lib/user';
 import { createInitialBoard } from '@/lib/game/logic';
 import { PLAYER_IDS } from '@/lib/game/constants';
 import type { GameState } from '@/lib/game/types';
-import { Loader2, Users, LogIn, ArrowLeft } from 'lucide-react';
+import { Loader2, Users, LogIn, ArrowLeft, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 function generateRoomCode() {
@@ -35,9 +35,9 @@ export default function LobbyPage() {
   
   const rooms = useMemo(() => {
     if (!roomsData) return [];
-    return roomsData
-        .filter((room: any) => room.status === 'waiting')
-        .sort((a: any, b: any) => b.createdAt - a.createdAt);
+    return (roomsData as any[])
+        .filter(room => room.status !== 'finished') // Hide finished games for now
+        .sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
   }, [roomsData]);
 
 
@@ -80,7 +80,7 @@ export default function LobbyPage() {
     }
   };
   
-  const handleJoinRoomFromList = (roomId: string) => {
+  const handleJoinOrWatch = (roomId: string) => {
     router.push(`/room/${roomId}`);
   }
 
@@ -137,7 +137,18 @@ export default function LobbyPage() {
               <div className="space-y-4">
                 {rooms.map((room: any) => {
                   const playersArray = room.players ? Object.values(room.players) : [];
+                  const playerCount = playersArray.length;
                   const host = playersArray[0] as any;
+                  const isFull = playerCount >= 4;
+                  const isInProgress = room.status === 'in-progress';
+                  
+                  let roomStatusBadge = null;
+                  if (isInProgress) {
+                    roomStatusBadge = <Badge variant="destructive">IN PROGRESS</Badge>;
+                  } else if (isFull) {
+                    roomStatusBadge = <Badge variant="destructive">FULL</Badge>;
+                  }
+                  
                   return (
                   <div key={room.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
@@ -147,12 +158,15 @@ export default function LobbyPage() {
                     <div className="flex items-center space-x-4">
                         <div className='flex items-center space-x-1 text-sm text-muted-foreground'>
                             <Users className="h-4 w-4" />
-                            <span>{playersArray.length} / 4</span>
+                            <span>{playerCount} / 4</span>
                         </div>
-                        {playersArray.length >= 4 ? (
-                           <Badge variant="destructive">FULL</Badge>
+                        {roomStatusBadge}
+                        {isInProgress || isFull ? (
+                           <Button onClick={() => handleJoinOrWatch(room.id)}>
+                               <Eye className="mr-2 h-4 w-4" /> Watch
+                           </Button>
                         ) : (
-                           <Button onClick={() => handleJoinRoomFromList(room.id)}>
+                           <Button onClick={() => handleJoinOrWatch(room.id)}>
                                 <LogIn className="mr-2 h-4 w-4" />
                                 Join
                            </Button>
