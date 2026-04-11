@@ -7,9 +7,9 @@ import GameInfoPanel from './GameInfoPanel';
 import PromotionDialog from './PromotionDialog';
 import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board, PieceType, Player } from '@/lib/game/types';
-import { BOARD_SIZE, PLAYERS, PLAYER_IDS } from '@/lib/game/constants';
+import { BOARD_SIZE, PLAYER_IDS } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast";
-import { useDoc, useDatabase } from '@/firebase';
+import { getDatabase } from 'firebase/database';
 import { ref, update } from 'firebase/database';
 import { getLocalUser } from '@/lib/user';
 import { Loader2 } from 'lucide-react';
@@ -33,9 +33,9 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
 function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
   switch (playerId) {
     case 'Red': return { row, col };
-    case 'Green': return { row: size - 1 - col, col: row }; // 90 deg CCW
+    case 'Green': return { row: col, col: size - 1 - row }; // 270 deg CW
     case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg
-    case 'Yellow': return { row: col, col: size - 1 - row }; // 90 deg CW
+    case 'Yellow': return { row: size - 1 - col, col: row }; // 90 deg CW
     default: return { row, col };
   }
 }
@@ -43,10 +43,10 @@ function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: n
 function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
     if (row === -1 || col === -1) return {row, col};
     switch (playerId) {
-        case 'Red': return { row, col }; // 0 deg, bottom -> bottom
-        case 'Green': return { row: size - 1 - col, col: row }; // 270 deg CW, right -> bottom
-        case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg, top -> bottom
-        case 'Yellow': return { row: col, col: size - 1 - row }; // 90 deg CW, left -> bottom
+        case 'Red': return { row, col }; // 0 deg
+        case 'Green': return { row: size - 1 - col, col: row }; // 90 deg CCW
+        case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg
+        case 'Yellow': return { row: col, col: size - 1 - row }; // 270 deg CCW
         default: return { row, col };
     }
 }
@@ -55,7 +55,7 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
 interface GameProps {
   roomId: string;
   onLeaveRoom: () => void;
-  userRole: 'player' | 'spectator' | 'joining';
+  userRole: 'player' | 'joining';
   roomData: any; 
 }
 
@@ -89,19 +89,17 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
     return gameState.eliminatedPlayerIds.includes(userPlayerInfo.playerId);
   }, [gameState, userPlayerInfo]);
 
-  const isSpectator = userRole === 'spectator' || isEliminated;
-  const isPlayer = userRole === 'player' && !isEliminated;
+  const isPlayerTurn = useMemo(() => {
+    if (!gameState || !userPlayerInfo || gameState.players.length === 0) return false;
+    return gameState.players[gameState.currentPlayerIndex]?.id === userPlayerInfo.playerId;
+  }, [gameState, userPlayerInfo]);
 
-  const defaultPerspective: PlayerId = useMemo(() => userPlayerInfo?.playerId || 'Red', [userPlayerInfo]);
-  const [perspective, setPerspective] = useState<PlayerId>('Red');
+  const canPlay = userRole === 'player' && !isEliminated;
 
-  useEffect(() => {
-    if (defaultPerspective) {
-      setPerspective(defaultPerspective);
-    }
-  }, [defaultPerspective]);
+  const perspective: PlayerId = useMemo(() => {
+    return userPlayerInfo?.playerId || PLAYER_IDS[0];
+  }, [userPlayerInfo]);
   
-  const perspectiveToUse = isSpectator ? perspective : defaultPerspective;
 
   useEffect(() => {
     if (gameState && gameState.players.length > 0) {
@@ -119,7 +117,7 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
         }
       });
 
-      if (gameState.winner && (!prevEliminatedPlayerIdsRef.current.includes(gameState.winner) || newlyEliminated.length > 0) ) {
+      if (gameState.winner && !prevEliminatedPlayerIdsRef.current.includes(gameState.winner)) {
         const winnerName = gameState.players.find(p => p.id === gameState.winner)?.name;
         if (winnerName) {
             toast({
@@ -135,31 +133,31 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
 
   useEffect(() => {
     setSelectedSquare(null);
-  }, [gameState?.currentPlayerIndex, perspectiveToUse]);
+  }, [gameState?.currentPlayerIndex, perspective]);
 
   const validMoves = useMemo(() => {
     if (!selectedSquare || !gameState) return [];
     const moves = getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
-    return moves.map(move => getRotatedCoords(move.row, move.col, perspectiveToUse, BOARD_SIZE));
-  }, [selectedSquare, gameState, perspectiveToUse]);
+    return moves.map(move => getRotatedCoords(move.row, move.col, perspective, BOARD_SIZE));
+  }, [selectedSquare, gameState, perspective]);
 
   const displayBoard = useMemo(() => {
     if (!gameState) return createInitialBoard();
-    return getRotatedBoard(gameState.board, perspectiveToUse);
-  }, [gameState, perspectiveToUse]);
+    return getRotatedBoard(gameState.board, perspective);
+  }, [gameState, perspective]);
   
   const displaySelectedSquare = useMemo(() => {
     if (!selectedSquare) return null;
-    return getRotatedCoords(selectedSquare.row, selectedSquare.col, perspectiveToUse, BOARD_SIZE);
-  }, [selectedSquare, perspectiveToUse]);
+    return getRotatedCoords(selectedSquare.row, selectedSquare.col, perspective, BOARD_SIZE);
+  }, [selectedSquare, perspective]);
 
   const displayLastMove = useMemo(() => {
       if (!gameState?.lastMove) return null;
       return {
-          from: getRotatedCoords(gameState.lastMove.from.row, gameState.lastMove.from.col, perspectiveToUse, BOARD_SIZE),
-          to: getRotatedCoords(gameState.lastMove.to.row, gameState.lastMove.to.col, perspectiveToUse, BOARD_SIZE),
+          from: getRotatedCoords(gameState.lastMove.from.row, gameState.lastMove.from.col, perspective, BOARD_SIZE),
+          to: getRotatedCoords(gameState.lastMove.to.row, gameState.lastMove.to.col, perspective, BOARD_SIZE),
       }
-  }, [gameState?.lastMove, perspectiveToUse]);
+  }, [gameState?.lastMove, perspective]);
 
   const updateGameState = useCallback(async (nextState: GameState) => {
     const roomRef = ref(getDatabase(), 'rooms/' + roomId);
@@ -282,8 +280,13 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
        const isPromotion = fromPiece.type === 'Pawn' && (
         to.row === 0 || to.row === 13 || to.col === 0 || to.col === 13
       );
+      
+      const isFinalRank = (fromPiece.player === 'Red' && to.row === 0) ||
+                          (fromPiece.player === 'Blue' && to.row === 13) ||
+                          (fromPiece.player === 'Yellow' && to.col === 13) ||
+                          (fromPiece.player === 'Green' && to.col === 0);
 
-      if (isPromotion) {
+      if (isPromotion && isFinalRank) {
           setPromotionMove({ from, to });
       } else {
           applyMove(from, to);
@@ -293,16 +296,16 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
   }, [gameState, applyMove]);
 
   const handleSquareClick = useCallback((row: number, col: number) => {
-    if (!gameState || gameState.winner || promotionMove || !userPlayerInfo || gameState.players.length === 0) return;
+    if (!gameState || gameState.winner || promotionMove || !canPlay) {
+      return;
+    }
     
-    if(!isPlayer) return;
-
-    if(gameState.players[gameState.currentPlayerIndex].id !== userPlayerInfo.playerId) {
+    if(!isPlayerTurn) {
       toast({ title: "Not your turn!", description: "Please wait for your opponent to move.", variant: 'destructive'});
       return;
     }
 
-    const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, perspectiveToUse, BOARD_SIZE);
+    const { row: originalRow, col: originalCol } = getOriginalCoords(row, col, perspective, BOARD_SIZE);
     
     const clickedSquare = gameState.board[originalRow][originalCol];
     
@@ -318,7 +321,7 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
     } else {
       setSelectedSquare(null);
     }
-  }, [gameState, promotionMove, userPlayerInfo, toast, perspectiveToUse, selectedSquare, handleAttemptMove, isPlayer]);
+  }, [gameState, promotionMove, toast, perspective, selectedSquare, handleAttemptMove, canPlay, isPlayerTurn]);
 
   const handlePromotionSelect = (pieceType: PieceType) => {
     if (!promotionMove) return;
@@ -333,7 +336,6 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const eliminatedPlayers = gameState.players.filter(p => gameState.eliminatedPlayerIds.includes(p.id));
   const winner = gameState.players.find(p => p.id === gameState.winner);
-  const spectators = roomData?.spectators ? Object.values(roomData.spectators) : [];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
@@ -357,10 +359,6 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
           onLeaveRoom={onLeaveRoom}
           capturedPieces={gameState.capturedPieces}
           players={gameState.players}
-          isSpectator={isSpectator}
-          onPerspectiveChange={setPerspective}
-          currentPerspective={perspectiveToUse}
-          spectators={spectators}
         />
       </div>
       {promotionMove && currentPlayer && (

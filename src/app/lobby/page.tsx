@@ -11,7 +11,7 @@ import { getLocalUser } from '@/lib/user';
 import { createInitialBoard } from '@/lib/game/logic';
 import { PLAYER_IDS } from '@/lib/game/constants';
 import type { GameState } from '@/lib/game/types';
-import { Loader2, Users, LogIn, ArrowLeft, Eye } from 'lucide-react';
+import { Loader2, Users, LogIn, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 function generateRoomCode() {
@@ -80,10 +80,6 @@ export default function LobbyPage() {
     }
   };
   
-  const handleJoinOrWatch = (roomId: string) => {
-    router.push(`/room/${roomId}`);
-  }
-
   const handleJoinWithCode = () => {
     const code = joinCode.trim().toUpperCase();
     if (code.length === 6) {
@@ -141,13 +137,7 @@ export default function LobbyPage() {
                   const host = playersArray[0] as any;
                   const isFull = playerCount >= 4;
                   const isInProgress = room.status === 'in-progress';
-                  
-                  let roomStatusBadge = null;
-                  if (isInProgress) {
-                    roomStatusBadge = <Badge variant="destructive">IN PROGRESS</Badge>;
-                  } else if (isFull) {
-                    roomStatusBadge = <Badge variant="destructive">FULL</Badge>;
-                  }
+                  const canJoin = !isFull && !isInProgress;
                   
                   return (
                   <div key={room.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -160,17 +150,12 @@ export default function LobbyPage() {
                             <Users className="h-4 w-4" />
                             <span>{playerCount} / 4</span>
                         </div>
-                        {roomStatusBadge}
-                        {isInProgress || isFull ? (
-                           <Button onClick={() => handleJoinOrWatch(room.id)}>
-                               <Eye className="mr-2 h-4 w-4" /> Watch
-                           </Button>
-                        ) : (
-                           <Button onClick={() => handleJoinOrWatch(room.id)}>
-                                <LogIn className="mr-2 h-4 w-4" />
-                                Join
-                           </Button>
-                        )}
+                        {isFull && !isInProgress && <Badge variant="destructive">FULL</Badge>}
+                        {isInProgress && <Badge variant="secondary">IN PROGRESS</Badge>}
+                       <Button onClick={() => router.push(`/room/${room.id}`)} disabled={!canJoin}>
+                            <LogIn className="mr-2 h-4 w-4" />
+                            Join
+                       </Button>
                     </div>
                   </div>
                 )})}
