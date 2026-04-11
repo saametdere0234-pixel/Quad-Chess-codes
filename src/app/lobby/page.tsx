@@ -73,7 +73,7 @@ export default function LobbyPage() {
         createdAt: serverTimestamp(),
       });
       router.push(`/room/${roomId}`);
-    } catch (error) => {
+    } catch (error) {
       console.error("Error creating room:", error);
     }
   };
