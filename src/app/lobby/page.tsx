@@ -25,6 +25,7 @@ export default function LobbyPage() {
   const [joinCode, setJoinCode] = useState('');
 
   useEffect(() => {
+    // Safely get user info on the client
     setUser(getLocalUser());
   }, []);
 
@@ -93,6 +94,15 @@ export default function LobbyPage() {
     }
   };
 
+  if (!userId) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading user...</p>
+      </div>
+    );
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4 pt-10 bg-background">
       <div className="w-full max-w-4xl mx-auto">
@@ -138,12 +148,12 @@ export default function LobbyPage() {
             ) : rooms && rooms.length > 0 ? (
               <div className="space-y-4">
                 {rooms.map((room: any) => {
+                  if (!room || !room.id) return null; // Add a guard against malformed room data
                   const playersArray = room.players ? Object.values(room.players) : [];
                   const playerCount = playersArray.length;
                   const host = playersArray[0] as any;
                   const isFull = playerCount >= 4;
                   const isInProgress = room.status === 'in-progress';
-                  const canJoin = !isFull && !isInProgress;
                   
                   return (
                   <div key={room.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -156,9 +166,14 @@ export default function LobbyPage() {
                             <Users className="h-4 w-4" />
                             <span>{playerCount} / 4</span>
                         </div>
-                        {isFull && !isInProgress && <Badge variant="destructive">FULL</Badge>}
-                        {isInProgress && <Badge variant="secondary">IN PROGRESS</Badge>}
-                       <Button onClick={() => router.push(`/room/${room.id}`)} disabled={!canJoin}>
+                        
+                        {isInProgress ? (
+                          <Badge variant="secondary">IN PROGRESS</Badge>
+                        ) : isFull ? (
+                          <Badge variant="destructive">FULL</Badge>
+                        ) : null}
+
+                       <Button onClick={() => router.push(`/room/${room.id}`)} disabled={isFull || isInProgress}>
                             <LogIn className="mr-2 h-4 w-4" />
                             Join
                        </Button>
