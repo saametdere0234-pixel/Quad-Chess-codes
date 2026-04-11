@@ -1,6 +1,6 @@
-import { initializeApp, getApp, getApps, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import { initializeApp, getApp, getApps, type FirebaseApp } from 'firebase/app';
+import { getAuth, type Auth } from 'firebase/auth';
+import { getFirestore, type Firestore } from 'firebase/firestore';
 import { firebaseConfig } from './config';
 
 let firebaseApp: FirebaseApp;
@@ -28,6 +28,6 @@ export function initializeFirebase() {
 }
 
 export * from './provider';
-export * from './client-provider';
 export * from './firestore/use-doc';
 export * from './firestore/use-collection';
+export * from './auth/use-user';
