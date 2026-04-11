@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, updateDoc, doc, arrayUnion } from 'firebase/firestore';
+import { collection, serverTimestamp, query, orderBy, updateDoc, doc, arrayUnion, setDoc, limit } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { getLocalUser } from '@/lib/user';
@@ -21,22 +21,29 @@ export default function LobbyPage() {
   const firestore = useFirestore();
   const { nickname, userId } = getLocalUser();
 
+  // Optimized query to fetch recent rooms, filtering for 'waiting' on the client.
+  // This avoids the need for a composite index and improves initial load time.
   const roomsQuery = useMemo(() => 
     firestore 
       ? query(
-          collection(firestore, 'rooms'), 
-          where('status', '==', 'waiting'),
-          orderBy('createdAt', 'desc')
+          collection(firestore, 'rooms'),
+          orderBy('createdAt', 'desc'),
+          limit(50) // Limit to a reasonable number of rooms
         )
       : null
   , [firestore]);
 
-  const { data: rooms, loading } = useCollection(roomsQuery);
+  const { data: allRooms, loading } = useCollection(roomsQuery);
+  
+  // Filter for waiting rooms on the client
+  const rooms = useMemo(() => allRooms?.filter(room => room.status === 'waiting'), [allRooms]);
 
   const handleCreateRoom = async () => {
     if (!firestore || !nickname || !userId) return;
 
     const roomId = generateSixDigitCode();
+    const roomRef = doc(firestore, 'rooms', roomId); // Use the 6-digit code as the document ID
+
     const initialGameState: GameState = {
       board: createInitialBoard(),
       currentPlayerIndex: 0,
@@ -50,7 +57,8 @@ export default function LobbyPage() {
     };
 
     try {
-      await addDoc(collection(firestore, 'rooms'), {
+      // Use setDoc to create a document with a specific ID
+      await setDoc(roomRef, {
         id: roomId,
         name: `${nickname}'s Game`,
         players: [{ userId, nickname, playerId: 'Red' }],
@@ -77,10 +85,10 @@ export default function LobbyPage() {
        return;
     }
 
-    const roomDoc = (await import('firebase/firestore')).doc(firestore, 'rooms', roomId);
+    const roomDocRef = doc(firestore, 'rooms', roomId);
     const assignedPlayerId = PLAYER_IDS[currentPlayers.length];
     
-    await updateDoc(roomDoc, {
+    await updateDoc(roomDocRef, {
       players: arrayUnion({ userId, nickname, playerId: assignedPlayerId })
     });
     router.push(`/room/${roomId}`);
