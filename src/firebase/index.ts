@@ -3,27 +3,31 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { firebaseConfig } from './config';
 
+let firebaseApp: FirebaseApp;
+let auth: Auth;
+let firestore: Firestore;
+
 export function initializeFirebase() {
-  if (getApps().length > 0) {
-    const app = getApp();
-    return {
-      firebaseApp: app,
-      auth: getAuth(app),
-      firestore: getFirestore(app),
-    };
+  if (typeof window !== 'undefined') {
+    if (!getApps().length) {
+      firebaseApp = initializeApp(firebaseConfig);
+      auth = getAuth(firebaseApp);
+      firestore = getFirestore(firebaseApp);
+    } else {
+      firebaseApp = getApp();
+      auth = getAuth(firebaseApp);
+      firestore = getFirestore(firebaseApp);
+    }
   }
-
-  const firebaseApp = initializeApp(firebaseConfig);
-
+  
   return {
     firebaseApp,
-    auth: getAuth(firebaseApp),
-    firestore: getFirestore(firebaseApp),
+    auth,
+    firestore,
   };
 }
 
 export * from './provider';
 export * from './client-provider';
-export * from './auth/use-user';
 export * from './firestore/use-doc';
 export * from './firestore/use-collection';

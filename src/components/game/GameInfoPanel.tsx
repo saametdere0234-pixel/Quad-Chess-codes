@@ -1,13 +1,14 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Crown, Swords, RefreshCw, Box, Undo, Redo } from 'lucide-react';
+import { Crown, Swords, RefreshCw, Box, Undo, Redo, LogOut } from 'lucide-react';
 import type { Player, Piece, PlayerId } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS } from '@/lib/game/constants';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 
 interface GameInfoPanelProps {
@@ -21,6 +22,8 @@ interface GameInfoPanelProps {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  isMultiplayer?: boolean;
+  roomName?: string;
 }
 
 const CapturedPiece = ({ piece }: { piece: Piece }) => {
@@ -53,8 +56,10 @@ export default function GameInfoPanel({
   onRedo,
   canUndo,
   canRedo,
+  isMultiplayer,
+  roomName,
 }: GameInfoPanelProps) {
-
+  const router = useRouter();
   const activePlayers = players.filter(p => !eliminatedPlayers.find(ep => ep.id === p.id));
 
   return (
@@ -62,7 +67,7 @@ export default function GameInfoPanel({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
-            <span>Game Controls</span>
+            <span>{isMultiplayer ? 'Multiplayer Game' : 'Local Game'}</span>
             <div className='flex items-center space-x-1'>
                 <Button variant="ghost" size="icon" onClick={onUndo} disabled={!canUndo} aria-label="Undo move">
                     <Undo className="h-5 w-5" />
@@ -70,11 +75,12 @@ export default function GameInfoPanel({
                 <Button variant="ghost" size="icon" onClick={onRedo} disabled={!canRedo} aria-label="Redo move">
                     <Redo className="h-5 w-5" />
                 </Button>
-                <Button variant="ghost" size="icon" onClick={onRestart} aria-label="Restart Game">
-                    <RefreshCw className="h-5 w-5" />
+                <Button variant="ghost" size="icon" onClick={onRestart} aria-label={isMultiplayer ? "Leave Room" : "Restart Game"}>
+                  {isMultiplayer ? <LogOut className="h-5 w-5" /> : <RefreshCw className="h-5 w-5" />}
                 </Button>
             </div>
           </CardTitle>
+          {isMultiplayer && roomName && <CardDescription>Room: {roomName}</CardDescription>}
         </CardHeader>
         <CardContent>
           {winner ? (

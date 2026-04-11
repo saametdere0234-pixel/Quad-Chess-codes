@@ -32,6 +32,6 @@ export const useFirebase = (): FirebaseContextValue => {
   return context;
 };
 
-export const useFirebaseApp = (): FirebaseApp | null => useFirebase().firebaseApp;
-export const useAuth = (): Auth | null => useFirebase().auth;
-export const useFirestore = (): Firestore | null => useFirebase().firestore;
+export const useFirebaseApp = (): FirebaseApp | null => useFirebase()?.firebaseApp;
+export const useAuth = (): Auth | null => useFirebase()?.auth;
+export const useFirestore = (): Firestore | null => useFirebase()?.firestore;

@@ -13,6 +13,7 @@ export const useCollection = <T extends DocumentData>(
 ) => {
   const [data, setData] = useState<T[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!ref) {
@@ -29,9 +30,11 @@ export const useCollection = <T extends DocumentData>(
         snapshot.forEach((doc) => result.push({ ...doc.data(), id: doc.id }));
         setData(result);
         setLoading(false);
+        setError(null);
       },
       (error) => {
         console.error('useCollection error:', error);
+        setError(error);
         setData(null);
         setLoading(false);
       }
@@ -40,5 +43,5 @@ export const useCollection = <T extends DocumentData>(
     return () => unsubscribe();
   }, [ref]);
 
-  return { data, loading };
+  return { data, loading, error };
 };

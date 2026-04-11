@@ -9,6 +9,7 @@ export const useDoc = <T extends DocumentData>(
 ) => {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     if (!ref) {
@@ -20,11 +21,13 @@ export const useDoc = <T extends DocumentData>(
     const unsubscribe = onSnapshot(
       ref,
       (snapshot) => {
-        setData(snapshot.exists() ? snapshot.data() : null);
+        setData(snapshot.exists() ? ({ ...snapshot.data(), id: snapshot.id } as T) : null);
         setLoading(false);
+        setError(null);
       },
       (error) => {
         console.error('useDoc error:', error);
+        setError(error);
         setData(null);
         setLoading(false);
       }
@@ -33,5 +36,5 @@ export const useDoc = <T extends DocumentData>(
     return () => unsubscribe();
   }, [ref]);
 
-  return { data, loading };
+  return { data, loading, error };
 };

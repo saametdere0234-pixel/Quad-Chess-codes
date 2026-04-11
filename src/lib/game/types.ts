@@ -36,4 +36,5 @@ export interface GameState {
   lastMove: Move | null;
   enPassantTarget: { row: number; col: number } | null;
   capturedPieces: { [key in PlayerId]?: Piece[] };
+  status?: 'waiting' | 'in-progress' | 'finished';
 }
