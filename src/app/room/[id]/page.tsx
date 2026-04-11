@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useEffect, useCallback } from 'react';
+import { useMemo, useEffect } from 'react';
 import Game from '@/components/game/Game';
 import { useFirestore, useDoc } from '@/firebase';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -26,34 +26,10 @@ export default function RoomPage() {
   
   const { data: roomData, loading: roomLoading } = useDoc(roomRef);
 
-  const handleJoin = useCallback(async () => {
-    if (!roomRef || !roomData || !userId || !nickname) return;
-    
-    const userInRoom = roomData.players.some((p: any) => p.userId === userId);
-    if (userInRoom) return;
-
-    if (roomData.players.length >= 4) {
-      alert('This room is full. You will be redirected to the lobby.');
-      router.push('/lobby');
-      return;
-    }
-    
-    const assignedPlayerId = PLAYER_IDS[roomData.players.length];
-    try {
-      await updateDoc(roomRef, {
-        players: arrayUnion({ userId, nickname, playerId: assignedPlayerId })
-      });
-    } catch (error) {
-      console.error("Error joining room:", error);
-      alert("There was an error trying to join the room.");
-      router.push('/lobby');
-    }
-  }, [roomRef, roomData, userId, nickname, router]);
-
-
   useEffect(() => {
-    if (roomLoading || !firestore) return;
+    if (roomLoading || !firestore || !roomRef || !userId || !nickname) return;
 
+    // Room doesn't exist, redirect
     if (!roomData) {
       alert('Room not found. You will be redirected to the lobby.');
       router.push('/lobby');
@@ -62,11 +38,29 @@ export default function RoomPage() {
 
     const userInRoom = roomData.players.some((p: any) => p.userId === userId);
 
-    if (!userInRoom && roomData.status === 'waiting') {
-        handleJoin();
+    // If user is not in the room, try to join
+    if (!userInRoom) {
+      if (roomData.status !== 'waiting') {
+        alert('This game has already started. You will be redirected to the lobby.');
+        router.push('/lobby');
+        return;
+      }
+      if (roomData.players.length >= 4) {
+        alert('This room is full. You will be redirected to the lobby.');
+        router.push('/lobby');
+        return;
+      }
+      
+      const assignedPlayerId = PLAYER_IDS[roomData.players.length];
+      updateDoc(roomRef, {
+        players: arrayUnion({ userId, nickname, playerId: assignedPlayerId })
+      }).catch(error => {
+        console.error("Error joining room:", error);
+        alert("There was an error trying to join the room.");
+        router.push('/lobby');
+      });
     }
-
-  }, [roomLoading, roomData, firestore, userId, router, handleJoin]);
+  }, [roomLoading, roomData, firestore, roomRef, userId, nickname, router]);
 
 
   const handleStartGame = async () => {
@@ -89,28 +83,29 @@ export default function RoomPage() {
   }
 
   const userInRoom = roomData.players.some((p: any) => p.userId === userId);
+  // The host is always the first player in the array
   const isHost = roomData.players[0]?.userId === userId;
 
   if (roomData.status === 'waiting') {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center p-4 bg-background text-center">
         <h1 className="text-3xl font-bold mb-2">Waiting for Players</h1>
-        <p className="text-muted-foreground mb-6">Room ID: {roomData.id}</p>
+        <p className="text-muted-foreground mb-6">Room ID: <span className='font-mono p-1 bg-muted rounded'>{roomData.id}</span></p>
         
         <div className="w-full max-w-md bg-card p-6 rounded-lg shadow-sm mb-6">
           <h2 className="text-xl font-semibold mb-4 flex items-center justify-center"><Users className="mr-2"/> Players ({roomData.players.length}/4)</h2>
           <ul className="space-y-2">
-            {roomData.players.map((p: any, index: number) => {
-               const playerInfo = PLAYERS.find(pl => pl.id === PLAYER_IDS[index]);
+            {PLAYERS.slice(0, roomData.players.length).map((playerInfo, index) => {
+               const p = roomData.players[index];
                return (
                 <li key={p.userId} className="flex items-center justify-center text-lg">
                     <span 
                       className="font-semibold" 
-                      style={{color: playerInfo ? playerInfo.color : 'inherit'}}
+                      style={{color: playerInfo.color}}
                     >
                       {p.nickname}
                     </span>
-                    <span className="text-sm text-muted-foreground ml-2">({PLAYER_IDS[index]})</span>
+                    <span className="text-sm text-muted-foreground ml-2">({playerInfo.id})</span>
                  </li>
                )
             })}
@@ -122,6 +117,12 @@ export default function RoomPage() {
             Start Game ({roomData.players.length} players)
           </Button>
         )}
+        {!userInRoom && (
+             <div className="flex flex-col items-center">
+                <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                <p>Joining room...</p>
+            </div>
+        )}
          <Button variant="link" onClick={() => router.push('/lobby')} className="mt-4">Back to Lobby</Button>
       </div>
     );
@@ -130,6 +131,9 @@ export default function RoomPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-4 lg:p-8 bg-background">
       <div className="w-full max-w-7xl mx-auto">
+        <h1 className="text-4xl font-bold text-center mb-2 font-headline text-primary">
+          {roomData.name}
+        </h1>
         <Game isMultiplayer={true} roomId={roomId} />
       </div>
     </main>

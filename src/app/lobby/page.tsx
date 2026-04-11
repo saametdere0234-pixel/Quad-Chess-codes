@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, serverTimestamp, query, doc, setDoc, limit, where } from 'firebase/firestore';
+import { collection, serverTimestamp, query, doc, setDoc, limit, where, orderBy } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,25 +25,19 @@ export default function LobbyPage() {
   const { nickname, userId } = getLocalUser();
   const [joinCode, setJoinCode] = useState('');
 
-  // A real-time query for waiting rooms.
+  // A real-time query for waiting rooms, ordered by creation date.
   const roomsQuery = useMemo(() => 
     firestore 
       ? query(
           collection(firestore, 'rooms'),
           where('status', '==', 'waiting'),
+          orderBy('createdAt', 'desc'),
           limit(50)
         )
       : null
   , [firestore]);
 
   const { data: rooms, loading } = useCollection(roomsQuery);
-  
-  // Sort rooms on the client-side to avoid complex Firestore indexes
-  const sortedRooms = useMemo(() => {
-    if (!rooms) return [];
-    return [...rooms].sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
-  }, [rooms]);
-
 
   const handleCreateRoom = async () => {
     if (!firestore || !nickname || !userId) return;
@@ -132,9 +126,9 @@ export default function LobbyPage() {
               <div className="flex justify-center items-center p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : sortedRooms && sortedRooms.length > 0 ? (
+            ) : rooms && rooms.length > 0 ? (
               <div className="space-y-4">
-                {sortedRooms.map((room) => (
+                {rooms.map((room) => (
                   <div key={room.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
                       <h3 className="font-semibold">{room.name}</h3>
