@@ -7,7 +7,7 @@ import GameInfoPanel from './GameInfoPanel';
 import PromotionDialog from './PromotionDialog';
 import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board, PieceType, Player } from '@/lib/game/types';
-import { BOARD_SIZE, PLAYERS } from '@/lib/game/constants';
+import { BOARD_SIZE, PLAYERS, PLAYER_IDS } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast";
 import { useDoc, useDatabase } from '@/firebase';
 import { ref, update } from 'firebase/database';
@@ -279,16 +279,11 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     const isMoveValid = validMovesForPiece.some(move => move.row === to.row && move.col === to.col);
 
     if (isMoveValid) {
-       const promotionRanks: {[key in PlayerId]: {rows: number[], cols: number[]}} = {
-            Red: { rows: [0, 1, 2], cols: [0, 1, 2, 11, 12, 13] },
-            Blue: { rows: [11, 12, 13], cols: [0, 1, 2, 11, 12, 13] },
-            Yellow: { rows: [0, 1, 2, 11, 12, 13], cols: [11, 12, 13] },
-            Green: { rows: [0, 1, 2, 11, 12, 13], cols: [0, 1, 2] },
-      };
-      
-      const isPromotion = fromPiece.type === 'Pawn' && (
-        promotionRanks[fromPiece.player].rows.includes(to.row) ||
-        promotionRanks[fromPiece.player].cols.includes(to.col)
+       const isPromotion = fromPiece.type === 'Pawn' && (
+        (fromPiece.player === 'Red' && to.row === 0) ||
+        (fromPiece.player === 'Blue' && to.row === 13) ||
+        (fromPiece.player === 'Yellow' && to.col === 13) ||
+        (fromPiece.player === 'Green' && to.col === 0)
       );
 
       if (isPromotion) {
