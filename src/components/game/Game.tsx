@@ -13,18 +13,6 @@ import { useDoc, useDatabase } from '@/firebase';
 import { ref, update } from 'firebase/database';
 import { getLocalUser } from '@/lib/user';
 
-const createNewGameState = (): GameState => ({
-  board: createInitialBoard(),
-  currentPlayerIndex: 0,
-  players: PLAYERS,
-  eliminatedPlayerIds: [],
-  winner: null,
-  lastMove: null,
-  enPassantTarget: null,
-  capturedPieces: {},
-  status: 'in-progress',
-});
-
 function getRotatedBoard(board: Board, playerId: PlayerId): Board {
     const size = board.length;
     const newBoard = Array(size).fill(null).map(() => Array(size).fill(null));
@@ -80,7 +68,16 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
   const gameState = useMemo<GameState | null>(() => {
     if (roomData?.gameState) {
         try {
-            return JSON.parse(roomData.gameState) as GameState;
+            const parsedState = JSON.parse(roomData.gameState) as GameState;
+            if (!parsedState.players) {
+                // If players array is missing in gameState, try to build it from roomData
+                 const roomPlayers = roomData.players ? (Object.values(roomData.players) as any[]) : [];
+                 parsedState.players = PLAYERS.map(basePlayer => {
+                    const roomPlayer = roomPlayers.find(p => p.playerId === basePlayer.id);
+                    return roomPlayer ? { ...basePlayer, name: roomPlayer.nickname } : basePlayer;
+                });
+            }
+            return parsedState;
         } catch (e) {
             console.error("Failed to parse game state:", e);
             return null;
@@ -94,18 +91,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
   const { toast } = useToast();
   
   const prevEliminatedPlayerIdsRef = useRef<PlayerId[]>([]);
-  
-  const players = useMemo<Player[]>(() => {
-    if (roomData?.players) {
-        const roomPlayers = Object.values(roomData.players) as any[];
-        return PLAYERS.map(basePlayer => {
-            const roomPlayer = roomPlayers.find(p => p.playerId === basePlayer.id);
-            return roomPlayer ? { ...basePlayer, name: roomPlayer.nickname } : basePlayer;
-        });
-    }
-    return PLAYERS;
-  }, [roomData?.players]);
-  
+    
   const userPlayerInfo = useMemo(() => 
     roomData?.players ? roomData.players[userId] : null
   , [roomData, userId]);
@@ -115,12 +101,12 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
   }, [userPlayerInfo]);
 
   useEffect(() => {
-    if (gameState) {
+    if (gameState && gameState.players.length > 0) {
       const prevEliminated = prevEliminatedPlayerIdsRef.current;
       const newlyEliminated = gameState.eliminatedPlayerIds.filter(id => !prevEliminated.includes(id));
       
       newlyEliminated.forEach(eliminatedId => {
-        const playerName = players.find(p => p.id === eliminatedId)?.name;
+        const playerName = gameState.players.find(p => p.id === eliminatedId)?.name;
         if(playerName) {
             toast({
               title: "Player Eliminated!",
@@ -131,7 +117,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
       });
 
       if (gameState.winner && (!prevEliminatedPlayerIdsRef.current.includes(gameState.winner) || newlyEliminated.length > 0) ) {
-        const winnerName = players.find(p => p.id === gameState.winner)?.name;
+        const winnerName = gameState.players.find(p => p.id === gameState.winner)?.name;
         if (winnerName) {
             toast({
                 title: "Game Over!",
@@ -142,7 +128,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
 
       prevEliminatedPlayerIdsRef.current = [...gameState.eliminatedPlayerIds, ...(gameState.winner ? [gameState.winner] : [])];
     }
-  }, [gameState, players, toast]);
+  }, [gameState, toast]);
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -150,9 +136,9 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
 
   const validMoves = useMemo(() => {
     if (!selectedSquare || !gameState) return [];
-    const moves = getValidMoves(selectedSquare.row, selectedSquare.col, { ...gameState, players });
+    const moves = getValidMoves(selectedSquare.row, selectedSquare.col, gameState);
     return moves.map(move => getRotatedCoords(move.row, move.col, currentUserPlayerId, BOARD_SIZE));
-  }, [selectedSquare, gameState, currentUserPlayerId, players]);
+  }, [selectedSquare, gameState, currentUserPlayerId]);
 
   const displayBoard = useMemo(() => {
     if (!gameState) return createInitialBoard();
@@ -184,7 +170,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     const fromPiece = gameState.board[from.row][from.col].piece;
     if (!fromPiece) return;
 
-    const nextState = produce({ ...gameState, players }, draft => {
+    const nextState = produce(gameState, draft => {
         let capturedPiece: Piece | null = draft.board[to.row][to.col].piece;
         const move: Move = { from, to };
         const isEnPassant = fromPiece.type === 'Pawn' && !!draft.enPassantTarget && to.row === draft.enPassantTarget.row && to.col === draft.enPassantTarget.col;
@@ -277,7 +263,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     });
 
     updateGameState(nextState);
-  }, [gameState, players, updateGameState]);
+  }, [gameState, updateGameState]);
   
   const handleAttemptMove = useCallback((from: { row: number, col: number }, to: { row: number, col: number }) => {
     if (!gameState) return;
@@ -287,7 +273,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
       return;
     }
 
-    const validMovesForPiece = getValidMoves(from.row, from.col, { ...gameState, players });
+    const validMovesForPiece = getValidMoves(from.row, from.col, gameState);
     const isMoveValid = validMovesForPiece.some(move => move.row === to.row && move.col === to.col);
 
     if (isMoveValid) {
@@ -310,10 +296,10 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
       }
     }
     setSelectedSquare(null);
-  }, [gameState, players, applyMove]);
+  }, [gameState, applyMove]);
 
   const handleSquareClick = useCallback((row: number, col: number) => {
-    if (!gameState || gameState.winner || promotionMove || !userPlayerInfo) return;
+    if (!gameState || gameState.winner || promotionMove || !userPlayerInfo || gameState.players.length === 0) return;
 
     if(gameState.players[gameState.currentPlayerIndex].id !== userPlayerInfo.playerId) {
       toast({ title: "Not your turn!", description: "Please wait for your opponent to move.", variant: 'destructive'});
@@ -344,13 +330,13 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     setPromotionMove(null);
   };
   
-  if (roomLoading || !gameState) {
+  if (roomLoading || !gameState || !gameState.players || gameState.players.length === 0) {
     return <div className="flex items-center justify-center h-full">Loading game...</div>;
   }
 
-  const currentPlayer = players.find(p => p.id === gameState.players[gameState.currentPlayerIndex].id);
-  const eliminatedPlayers = players.filter(p => gameState.eliminatedPlayerIds.includes(p.id));
-  const winner = players.find(p => p.id === gameState.winner);
+  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+  const eliminatedPlayers = gameState.players.filter(p => gameState.eliminatedPlayerIds.includes(p.id));
+  const winner = gameState.players.find(p => p.id === gameState.winner);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
@@ -370,7 +356,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
           winner={winner || null}
           onLeaveRoom={onLeaveRoom}
           capturedPieces={gameState.capturedPieces}
-          players={players}
+          players={gameState.players}
           isMultiplayer={true}
           roomName={roomData?.name}
         />

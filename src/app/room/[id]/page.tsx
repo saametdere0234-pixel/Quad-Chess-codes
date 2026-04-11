@@ -3,12 +3,13 @@
 import { useMemo, useEffect, useCallback } from 'react';
 import Game from '@/components/game/Game';
 import { useDatabase, useDoc } from '@/firebase';
-import { ref, update, runTransaction, remove } from 'firebase/database';
+import { ref, update, runTransaction } from 'firebase/database';
 import { useParams, useRouter } from 'next/navigation';
 import { getLocalUser } from '@/lib/user';
 import { PLAYER_IDS, PLAYERS } from '@/lib/game/constants';
 import { Button } from '@/components/ui/button';
 import { Loader2, Users } from 'lucide-react';
+import type { Player } from '@/lib/game/types';
 
 export default function RoomPage() {
   const params = useParams();
@@ -75,9 +76,30 @@ export default function RoomPage() {
 
 
   const handleStartGame = async () => {
-    if (!roomRef) return;
+    if (!roomRef || !roomData?.players) return;
+
+    const playersInRoom = Object.values(roomData.players);
+    const sortedPlayers = playersInRoom.sort((a: any, b: any) => PLAYER_IDS.indexOf(a.playerId) - PLAYER_IDS.indexOf(b.playerId));
+
+    const gamePlayers = sortedPlayers.map((p: any) => ({
+        id: p.playerId,
+        name: p.nickname,
+        color: PLAYERS.find(pl => pl.id === p.playerId)!.color
+    }));
+    
+    const currentGameState = JSON.parse(roomData.gameState);
+    
+    const updatedGameState = {
+        ...currentGameState,
+        players: gamePlayers,
+        status: 'in-progress'
+    };
+
     try {
-        await update(roomRef, { status: 'in-progress' });
+        await update(roomRef, { 
+            status: 'in-progress',
+            gameState: JSON.stringify(updatedGameState)
+        });
     } catch (error) {
         console.error("Error starting game:", error);
         alert("Could not start the game.");
@@ -88,15 +110,40 @@ export default function RoomPage() {
     if (!roomRef || !userId) return;
 
     runTransaction(roomRef, (currentData) => {
-        if (currentData) {
-            if (currentData.players && currentData.players[userId]) {
-                delete currentData.players[userId];
-            }
-            // If no players are left, delete the room
-            if (!currentData.players || Object.keys(currentData.players).length === 0) {
-                return null; // Returning null from a transaction deletes the data
+        if (!currentData) return null;
+
+        const playerToRemoveId = currentData.players?.[userId]?.playerId;
+        
+        if (currentData.players?.[userId]) {
+            delete currentData.players[userId];
+        }
+
+        if (currentData.status === 'in-progress' && playerToRemoveId) {
+            const gameState = JSON.parse(currentData.gameState);
+            if (gameState && !gameState.eliminatedPlayerIds.includes(playerToRemoveId)) {
+                gameState.eliminatedPlayerIds.push(playerToRemoveId);
+                
+                const activePlayers = gameState.players.filter((p: Player) => !gameState.eliminatedPlayerIds.includes(p.id));
+                if (activePlayers.length <= 1) {
+                    gameState.winner = activePlayers[0]?.id || null;
+                    gameState.status = 'finished';
+                } else {
+                    if (gameState.players[gameState.currentPlayerIndex].id === playerToRemoveId) {
+                         let nextPlayerIndex = gameState.currentPlayerIndex;
+                        do {
+                            nextPlayerIndex = (nextPlayerIndex + 1) % gameState.players.length;
+                        } while (gameState.eliminatedPlayerIds.includes(gameState.players[nextPlayerIndex].id));
+                        gameState.currentPlayerIndex = nextPlayerIndex;
+                    }
+                }
+                currentData.gameState = JSON.stringify(gameState);
             }
         }
+
+        if (!currentData.players || Object.keys(currentData.players).length === 0) {
+            return null;
+        }
+        
         return currentData;
     }).then(() => {
         router.push('/lobby');
@@ -104,7 +151,7 @@ export default function RoomPage() {
         console.error("Error leaving room:", error);
         alert("There was an error trying to leave the room.");
     });
-}, [roomRef, userId, router]);
+  }, [roomRef, userId, router]);
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -113,6 +160,7 @@ export default function RoomPage() {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
+        handleLeaveRoom();
     };
   }, [handleLeaveRoom]);
 
@@ -168,7 +216,7 @@ export default function RoomPage() {
                 <p>Joining room...</p>
             </div>
         )}
-         <Button variant="link" onClick={() => router.push('/lobby')} className="mt-4">Back to Lobby</Button>
+         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Back to Lobby</Button>
       </div>
     );
   }
