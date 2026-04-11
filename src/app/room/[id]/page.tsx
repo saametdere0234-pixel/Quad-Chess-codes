@@ -7,7 +7,7 @@ import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useParams, useRouter } from 'next/navigation';
 import { getLocalUser } from '@/lib/user';
 import { useEffect } from 'react';
-import { PLAYER_IDS } from '@/lib/game/constants';
+import { PLAYER_IDS, PLAYERS } from '@/lib/game/constants';
 import { Button } from '@/components/ui/button';
 import { Loader2, Users } from 'lucide-react';
 
