@@ -31,9 +31,9 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
 function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
   switch (playerId) {
     case 'Red': return { row, col };
-    case 'Green': return { row: col, col: size - 1 - row }; // 270 deg CW
+    case 'Green': return { row: size - 1 - col, col: row }; // 90 deg CCW
     case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg
-    case 'Yellow': return { row: size - 1 - col, col: row }; // 90 deg CW
+    case 'Yellow': return { row: col, col: size - 1 - row }; // 90 deg CW
     default: return { row, col };
   }
 }
@@ -41,10 +41,10 @@ function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: n
 function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
     if (row === -1 || col === -1) return {row, col};
     switch (playerId) {
-        case 'Red': return { row, col }; // 0 deg
-        case 'Green': return { row: size - 1 - col, col: row }; // 90 deg CCW
-        case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg
-        case 'Yellow': return { row: col, col: size - 1 - row }; // 270 deg CCW
+        case 'Red': return { row, col }; // 0 deg, bottom -> bottom
+        case 'Green': return { row: col, col: size - 1 - row }; // 90 deg CW, right -> bottom
+        case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg, top -> bottom
+        case 'Yellow': return { row: size - 1 - col, col: row }; // 270 deg CW, left -> bottom
         default: return { row, col };
     }
 }
@@ -69,13 +69,15 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
     if (roomData?.gameState) {
         try {
             const parsedState = JSON.parse(roomData.gameState) as GameState;
-            if (!parsedState.players) {
-                // If players array is missing in gameState, try to build it from roomData
+            if (!parsedState.players || parsedState.players.length === 0) {
                  const roomPlayers = roomData.players ? (Object.values(roomData.players) as any[]) : [];
-                 parsedState.players = PLAYERS.map(basePlayer => {
-                    const roomPlayer = roomPlayers.find(p => p.playerId === basePlayer.id);
-                    return roomPlayer ? { ...basePlayer, name: roomPlayer.nickname } : basePlayer;
-                });
+                 const sortedPlayers = roomPlayers.sort((a: any, b: any) => PLAYER_IDS.indexOf(a.playerId) - PLAYER_IDS.indexOf(b.playerId));
+
+                 parsedState.players = sortedPlayers.map((p: any) => ({
+                    id: p.playerId,
+                    name: p.nickname,
+                    color: PLAYERS.find(pl => pl.id === p.playerId)!.color
+                }));
             }
             return parsedState;
         } catch (e) {

@@ -76,7 +76,7 @@ export default function RoomPage() {
 
 
   const handleStartGame = async () => {
-    if (!roomRef || !roomData?.players) return;
+    if (!roomRef || !roomData?.players || Object.keys(roomData.players).length !== 4) return;
 
     const playersInRoom = Object.values(roomData.players);
     const sortedPlayers = playersInRoom.sort((a: any, b: any) => PLAYER_IDS.indexOf(a.playerId) - PLAYER_IDS.indexOf(b.playerId));
@@ -205,17 +205,27 @@ export default function RoomPage() {
           </ul>
         </div>
         
-        {isHost && userInRoom && (
-          <Button onClick={handleStartGame} disabled={playersArray.length < 2}>
-            Start Game ({playersArray.length} players)
-          </Button>
-        )}
-        {!userInRoom && (
-             <div className="flex flex-col items-center">
-                <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-                <p>Joining room...</p>
-            </div>
-        )}
+        <div className="flex flex-col items-center">
+            {isHost && userInRoom && (
+              <>
+                <Button onClick={handleStartGame} disabled={playersArray.length !== 4}>
+                  Start Game ({playersArray.length}/4 players)
+                </Button>
+                {playersArray.length !== 4 && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    You need 4 players to start the game.
+                  </p>
+                )}
+              </>
+            )}
+            {!userInRoom && (
+                 <div className="flex flex-col items-center">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+                    <p>Joining room...</p>
+                </div>
+            )}
+        </div>
+
          <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Back to Lobby</Button>
       </div>
     );
