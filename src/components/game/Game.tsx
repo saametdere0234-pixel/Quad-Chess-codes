@@ -280,10 +280,7 @@ export default function Game({ roomId, onLeaveRoom }: GameProps) {
 
     if (isMoveValid) {
        const isPromotion = fromPiece.type === 'Pawn' && (
-        (fromPiece.player === 'Red' && to.row === 0) ||
-        (fromPiece.player === 'Blue' && to.row === 13) ||
-        (fromPiece.player === 'Yellow' && to.col === 13) ||
-        (fromPiece.player === 'Green' && to.col === 0)
+        to.row === 0 || to.row === 13 || to.col === 0 || to.col === 13
       );
 
       if (isPromotion) {
