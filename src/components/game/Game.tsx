@@ -100,6 +100,19 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
     return userPlayerInfo?.playerId || PLAYER_IDS[0];
   }, [userPlayerInfo]);
   
+  useEffect(() => {
+    if (isEliminated) {
+      toast({
+        variant: 'destructive',
+        title: 'You have been eliminated!',
+        description: 'You will be returned to the lobby.',
+      });
+      const timer = setTimeout(() => {
+        onLeaveRoom();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isEliminated, onLeaveRoom, toast]);
 
   useEffect(() => {
     if (gameState && gameState.players.length > 0) {
@@ -108,7 +121,8 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
       
       newlyEliminated.forEach(eliminatedId => {
         const playerName = gameState.players.find(p => p.id === eliminatedId)?.name;
-        if(playerName) {
+        const isCurrentUserEliminated = userPlayerInfo?.playerId === eliminatedId;
+        if(playerName && !isCurrentUserEliminated) {
             toast({
               title: "Player Eliminated!",
               description: `${playerName} has been eliminated.`,
@@ -129,7 +143,7 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
 
       prevEliminatedPlayerIdsRef.current = [...gameState.eliminatedPlayerIds, ...(gameState.winner ? [gameState.winner] : [])];
     }
-  }, [gameState, toast]);
+  }, [gameState, toast, userPlayerInfo]);
 
   useEffect(() => {
     setSelectedSquare(null);
@@ -277,15 +291,15 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
     const isMoveValid = validMovesForPiece.some(move => move.row === to.row && move.col === to.col);
 
     if (isMoveValid) {
-       const isPromotion = fromPiece.type === 'Pawn' && (
-        to.row === 0 || to.row === 13 || to.col === 0 || to.col === 13
+      const isPromotion = fromPiece.type === 'Pawn' && (
+        to.row <= 1 || to.row >= 12 || to.col <= 1 || to.col >= 12
       );
       
-      const isFinalRank = (fromPiece.player === 'Red' && to.row === 0) ||
-                          (fromPiece.player === 'Blue' && to.row === 13) ||
-                          (fromPiece.player === 'Yellow' && to.col === 13) ||
-                          (fromPiece.player === 'Green' && to.col === 0);
-
+      const isFinalRank = (fromPiece.player === 'Red' && to.row <= 1) ||
+                          (fromPiece.player === 'Blue' && to.row >= 12) ||
+                          (fromPiece.player === 'Yellow' && to.col >= 12) ||
+                          (fromPiece.player === 'Green' && to.col <= 1);
+      
       if (isPromotion && isFinalRank) {
           setPromotionMove({ from, to });
       } else {
