@@ -1,12 +1,11 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import Game from '@/components/game/Game';
 import { useFirestore, useDoc } from '@/firebase';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useParams, useRouter } from 'next/navigation';
 import { getLocalUser } from '@/lib/user';
-import { useEffect } from 'react';
 import { PLAYER_IDS, PLAYERS } from '@/lib/game/constants';
 import { Button } from '@/components/ui/button';
 import { Loader2, Users } from 'lucide-react';
@@ -17,7 +16,7 @@ export default function RoomPage() {
   const firestore = useFirestore();
   const { userId, nickname } = getLocalUser();
 
-  const roomId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const roomId = (Array.isArray(params.id) ? params.id[0] : params.id).toUpperCase();
   
   const roomRef = useMemo(() => 
     firestore && roomId ? doc(firestore, 'rooms', roomId) : null
@@ -26,16 +25,30 @@ export default function RoomPage() {
   const { data: roomData, loading: roomLoading } = useDoc(roomRef);
 
   useEffect(() => {
-    if (!roomLoading && !roomData && firestore) {
-      // Room doesn't exist, redirect to lobby
+    if (roomLoading || !firestore) return; // Wait until loading is false and firestore is available
+
+    if (!roomData) {
+      alert('Room not found. You will be redirected to the lobby.');
       router.push('/lobby');
+      return;
     }
-  }, [roomLoading, roomData, router, firestore]);
+
+    const userInRoom = roomData.players.some((p: any) => p.userId === userId);
+    if (!userInRoom && roomData.players.length >= 4 && roomData.status === 'waiting') {
+        alert('This room is full. You will be redirected to the lobby.');
+        router.push('/lobby');
+    }
+
+  }, [roomLoading, roomData, router, firestore, userId]);
 
   const handleJoin = async () => {
     if (!roomRef || !roomData || !userId || !nickname) return;
     
-    if (roomData.players.length >= 4) return;
+    // Re-check just in case, to prevent race conditions
+    if (roomData.players.length >= 4) {
+        alert('This room is full.');
+        return;
+    }
     if (roomData.players.some((p: any) => p.userId === userId)) return;
     
     const assignedPlayerId = PLAYER_IDS[roomData.players.length];

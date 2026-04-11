@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, serverTimestamp, query, orderBy, updateDoc, doc, arrayUnion, setDoc, limit, where } from 'firebase/firestore';
+import { collection, serverTimestamp, query, updateDoc, doc, arrayUnion, setDoc, limit, where } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,7 @@ import { createInitialBoard } from '@/lib/game/logic';
 import { PLAYERS, PLAYER_IDS } from '@/lib/game/constants';
 import type { GameState } from '@/lib/game/types';
 import { Loader2, Users, LogIn, ArrowLeft } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 // Generates a 6-character uppercase alphanumeric code.
 function generateRoomCode() {
@@ -24,20 +25,26 @@ export default function LobbyPage() {
   const { nickname, userId } = getLocalUser();
   const [joinCode, setJoinCode] = useState('');
 
-  // Query for waiting rooms, ordered by creation time.
-  // This is a real-time query that will update automatically.
+  // Simplified query to be more robust against missing Firestore indexes.
   const roomsQuery = useMemo(() => 
     firestore 
       ? query(
           collection(firestore, 'rooms'),
           where('status', '==', 'waiting'),
-          orderBy('createdAt', 'desc'),
           limit(50)
         )
       : null
   , [firestore]);
 
   const { data: rooms, loading } = useCollection(roomsQuery);
+  
+  // Sort rooms on the client-side to avoid complex queries.
+  const sortedRooms = useMemo(() => {
+    if (!rooms) return [];
+    // Ensure createdAt exists and has seconds property for sorting
+    return [...rooms].sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
+  }, [rooms]);
+
 
   const handleCreateRoom = async () => {
     if (!firestore || !nickname || !userId) return;
@@ -81,7 +88,7 @@ export default function LobbyPage() {
     if (!room) return;
 
     if (room.players.length >= 4) {
-      alert("Room is full.");
+      alert("This room is full.");
       return;
     }
     
@@ -101,8 +108,8 @@ export default function LobbyPage() {
   }
 
   const handleJoinWithCode = () => {
-    if (joinCode.length === 6) {
-        router.push(`/room/${joinCode}`);
+    if (joinCode.trim().length === 6) {
+        router.push(`/room/${joinCode.trim()}`);
     }
   };
 
@@ -127,7 +134,7 @@ export default function LobbyPage() {
                         maxLength={6}
                         className="w-48"
                     />
-                    <Button onClick={handleJoinWithCode} disabled={joinCode.length !== 6}>
+                    <Button onClick={handleJoinWithCode} disabled={joinCode.trim().length !== 6}>
                         Join with Code
                     </Button>
                 </div>
@@ -148,9 +155,9 @@ export default function LobbyPage() {
               <div className="flex justify-center items-center p-8">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
-            ) : rooms && rooms.length > 0 ? (
+            ) : sortedRooms && sortedRooms.length > 0 ? (
               <div className="space-y-4">
-                {rooms.map((room) => (
+                {sortedRooms.map((room) => (
                   <div key={room.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
                       <h3 className="font-semibold">{room.name}</h3>
@@ -161,10 +168,14 @@ export default function LobbyPage() {
                             <Users className="h-4 w-4" />
                             <span>{room.players.length} / 4</span>
                         </div>
-                        <Button onClick={() => handleJoinRoomFromList(room.id)} disabled={room.players.length >= 4}>
-                            <LogIn className="mr-2 h-4 w-4" />
-                            Join
-                        </Button>
+                        {room.players.length >= 4 ? (
+                           <Badge variant="destructive">FULL</Badge>
+                        ) : (
+                           <Button onClick={() => handleJoinRoomFromList(room.id)}>
+                                <LogIn className="mr-2 h-4 w-4" />
+                                Join
+                           </Button>
+                        )}
                     </div>
                   </div>
                 ))}
