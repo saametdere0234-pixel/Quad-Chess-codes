@@ -3,13 +3,13 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, serverTimestamp, query, updateDoc, doc, arrayUnion, setDoc, limit, where } from 'firebase/firestore';
+import { collection, serverTimestamp, query, doc, setDoc, limit, where } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { getLocalUser } from '@/lib/user';
 import { createInitialBoard } from '@/lib/game/logic';
-import { PLAYERS, PLAYER_IDS } from '@/lib/game/constants';
+import { PLAYERS } from '@/lib/game/constants';
 import type { GameState } from '@/lib/game/types';
 import { Loader2, Users, LogIn, ArrowLeft } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +25,7 @@ export default function LobbyPage() {
   const { nickname, userId } = getLocalUser();
   const [joinCode, setJoinCode] = useState('');
 
-  // Simplified query to be more robust against missing Firestore indexes.
+  // A real-time query for waiting rooms.
   const roomsQuery = useMemo(() => 
     firestore 
       ? query(
@@ -38,10 +38,9 @@ export default function LobbyPage() {
 
   const { data: rooms, loading } = useCollection(roomsQuery);
   
-  // Sort rooms on the client-side to avoid complex queries.
+  // Sort rooms on the client-side to avoid complex Firestore indexes
   const sortedRooms = useMemo(() => {
     if (!rooms) return [];
-    // Ensure createdAt exists and has seconds property for sorting
     return [...rooms].sort((a, b) => (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0));
   }, [rooms]);
 
@@ -68,48 +67,26 @@ export default function LobbyPage() {
       await setDoc(roomRef, {
         id: roomId,
         name: `${nickname}'s Game`,
-        players: [{ userId, nickname, playerId: 'Red' }],
+        players: [{ userId, nickname, playerId: 'Red' }], // The creator is the first player
         gameState: JSON.stringify(initialGameState),
         status: 'waiting',
         createdAt: serverTimestamp(),
       });
       router.push(`/room/${roomId}`);
-    } catch (error) {
+    } catch (error) => {
       console.error("Error creating room:", error);
-      // You might want to show a toast to the user here
     }
   };
-
-  const handleJoinRoomFromList = async (roomId: string) => {
-    if (!firestore || !nickname || !userId) return;
-    
-    // Find the room data from the list to check players
-    const room = rooms?.find(r => r.id === roomId);
-    if (!room) return;
-
-    if (room.players.length >= 4) {
-      alert("This room is full.");
-      return;
-    }
-    
-    // If user is already in the players list, just navigate
-    if (room.players.find(p => p.userId === userId)) {
-       router.push(`/room/${roomId}`);
-       return;
-    }
-
-    const roomDocRef = doc(firestore, 'rooms', roomId);
-    const assignedPlayerId = PLAYER_IDS[room.players.length];
-    
-    await updateDoc(roomDocRef, {
-      players: arrayUnion({ userId, nickname, playerId: assignedPlayerId })
-    });
+  
+  // This function just navigates, the joining logic is on the room page
+  const handleJoinRoomFromList = (roomId: string) => {
     router.push(`/room/${roomId}`);
   }
 
   const handleJoinWithCode = () => {
-    if (joinCode.trim().length === 6) {
-        router.push(`/room/${joinCode.trim()}`);
+    const code = joinCode.trim().toUpperCase();
+    if (code.length === 6) {
+        router.push(`/room/${code}`);
     }
   };
 
@@ -117,7 +94,7 @@ export default function LobbyPage() {
     <main className="flex min-h-screen flex-col items-center p-4 pt-10 bg-background">
       <div className="w-full max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <Button variant="ghost" onClick={() => router.push('/')}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
+           <Button variant="ghost" onClick={() => router.push('/')}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
           <h1 className="text-3xl font-bold text-primary">Multiplayer Lobby</h1>
           <div/> {/* Spacer */}
         </div>
@@ -129,7 +106,7 @@ export default function LobbyPage() {
                         type="text" 
                         placeholder="Enter room code"
                         value={joinCode}
-                        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                        onChange={(e) => setJoinCode(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleJoinWithCode()}
                         maxLength={6}
                         className="w-48"
