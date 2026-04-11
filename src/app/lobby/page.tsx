@@ -1,48 +1,49 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCollection, useFirestore } from '@/firebase';
-import { collection, serverTimestamp, query, orderBy, updateDoc, doc, arrayUnion, setDoc, limit } from 'firebase/firestore';
+import { collection, serverTimestamp, query, orderBy, updateDoc, doc, arrayUnion, setDoc, limit, where } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { getLocalUser } from '@/lib/user';
 import { createInitialBoard } from '@/lib/game/logic';
 import { PLAYERS, PLAYER_IDS } from '@/lib/game/constants';
 import type { GameState } from '@/lib/game/types';
 import { Loader2, Users, LogIn, ArrowLeft } from 'lucide-react';
 
-function generateSixDigitCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+// Generates a 6-character uppercase alphanumeric code.
+function generateRoomCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 export default function LobbyPage() {
   const router = useRouter();
   const firestore = useFirestore();
   const { nickname, userId } = getLocalUser();
+  const [joinCode, setJoinCode] = useState('');
 
-  // Optimized query to fetch recent rooms, filtering for 'waiting' on the client.
-  // This avoids the need for a composite index and improves initial load time.
+  // Query for waiting rooms, ordered by creation time.
+  // This is a real-time query that will update automatically.
   const roomsQuery = useMemo(() => 
     firestore 
       ? query(
           collection(firestore, 'rooms'),
+          where('status', '==', 'waiting'),
           orderBy('createdAt', 'desc'),
-          limit(50) // Limit to a reasonable number of rooms
+          limit(50)
         )
       : null
   , [firestore]);
 
-  const { data: allRooms, loading } = useCollection(roomsQuery);
-  
-  // Filter for waiting rooms on the client
-  const rooms = useMemo(() => allRooms?.filter(room => room.status === 'waiting'), [allRooms]);
+  const { data: rooms, loading } = useCollection(roomsQuery);
 
   const handleCreateRoom = async () => {
     if (!firestore || !nickname || !userId) return;
 
-    const roomId = generateSixDigitCode();
-    const roomRef = doc(firestore, 'rooms', roomId); // Use the 6-digit code as the document ID
+    const roomId = generateRoomCode();
+    const roomRef = doc(firestore, 'rooms', roomId);
 
     const initialGameState: GameState = {
       board: createInitialBoard(),
@@ -57,7 +58,6 @@ export default function LobbyPage() {
     };
 
     try {
-      // Use setDoc to create a document with a specific ID
       await setDoc(roomRef, {
         id: roomId,
         name: `${nickname}'s Game`,
@@ -69,24 +69,30 @@ export default function LobbyPage() {
       router.push(`/room/${roomId}`);
     } catch (error) {
       console.error("Error creating room:", error);
+      // You might want to show a toast to the user here
     }
   };
 
-  const handleJoinRoom = async (roomId: string, currentPlayers: any[]) => {
+  const handleJoinRoomFromList = async (roomId: string) => {
     if (!firestore || !nickname || !userId) return;
     
-    if (currentPlayers.length >= 4) {
+    // Find the room data from the list to check players
+    const room = rooms?.find(r => r.id === roomId);
+    if (!room) return;
+
+    if (room.players.length >= 4) {
       alert("Room is full.");
       return;
     }
     
-    if (currentPlayers.find(p => p.userId === userId)) {
+    // If user is already in the players list, just navigate
+    if (room.players.find(p => p.userId === userId)) {
        router.push(`/room/${roomId}`);
        return;
     }
 
     const roomDocRef = doc(firestore, 'rooms', roomId);
-    const assignedPlayerId = PLAYER_IDS[currentPlayers.length];
+    const assignedPlayerId = PLAYER_IDS[room.players.length];
     
     await updateDoc(roomDocRef, {
       players: arrayUnion({ userId, nickname, playerId: assignedPlayerId })
@@ -94,14 +100,43 @@ export default function LobbyPage() {
     router.push(`/room/${roomId}`);
   }
 
+  const handleJoinWithCode = () => {
+    if (joinCode.length === 6) {
+        router.push(`/room/${joinCode}`);
+    }
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center p-4 pt-10 bg-background">
       <div className="w-full max-w-4xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <Button variant="ghost" onClick={() => router.push('/')}><ArrowLeft className="mr-2 h-4 w-4" /> Back</Button>
           <h1 className="text-3xl font-bold text-primary">Multiplayer Lobby</h1>
-          <Button onClick={handleCreateRoom}>Create Room</Button>
+          <div/> {/* Spacer */}
         </div>
+
+        <Card className="mb-6">
+            <CardContent className="p-4 flex items-center justify-between flex-wrap gap-4">
+                <div className="flex items-center space-x-2">
+                    <Input 
+                        type="text" 
+                        placeholder="Enter room code"
+                        value={joinCode}
+                        onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && handleJoinWithCode()}
+                        maxLength={6}
+                        className="w-48"
+                    />
+                    <Button onClick={handleJoinWithCode} disabled={joinCode.length !== 6}>
+                        Join with Code
+                    </Button>
+                </div>
+                 <div className="flex items-center space-x-4">
+                    <p className="text-sm text-muted-foreground">OR</p>
+                    <Button onClick={handleCreateRoom} variant="outline">Create New Room</Button>
+                </div>
+            </CardContent>
+        </Card>
         
         <Card>
           <CardHeader>
@@ -119,14 +154,14 @@ export default function LobbyPage() {
                   <div key={room.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div>
                       <h3 className="font-semibold">{room.name}</h3>
-                      <p className="text-sm text-muted-foreground">ID: {room.id} - Created by {room.players[0]?.nickname || 'Unknown'}</p>
+                      <p className="text-sm text-muted-foreground">ID: {room.id} - Host: {room.players[0]?.nickname || 'Unknown'}</p>
                     </div>
                     <div className="flex items-center space-x-4">
                         <div className='flex items-center space-x-1 text-sm text-muted-foreground'>
                             <Users className="h-4 w-4" />
                             <span>{room.players.length} / 4</span>
                         </div>
-                        <Button onClick={() => handleJoinRoom(room.id, room.players)} disabled={room.players.length >= 4}>
+                        <Button onClick={() => handleJoinRoomFromList(room.id)} disabled={room.players.length >= 4}>
                             <LogIn className="mr-2 h-4 w-4" />
                             Join
                         </Button>
