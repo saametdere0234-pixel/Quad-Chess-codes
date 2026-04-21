@@ -208,25 +208,6 @@ export default function RoomPage() {
     });
   }, [roomRef, userId, router]);
 
-  useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-        if (!roomRef || !userId) return;
-        runTransaction(roomRef, (currentData) => {
-            if (currentData && currentData.players && currentData.players[userId]) {
-                delete currentData.players[userId];
-                if (Object.keys(currentData.players).length === 0) {
-                    return null;
-                }
-            }
-            return currentData;
-        });
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, [roomRef, userId, handleLeaveRoom]);
-
 
   if (roomLoading || !roomData || userRole === 'joining' || !userId) {
     return (
@@ -282,7 +263,7 @@ export default function RoomPage() {
             )}
         </div>
 
-         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Leave Room</Button>
+         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Back to Lobby</Button>
       </div>
     );
   }

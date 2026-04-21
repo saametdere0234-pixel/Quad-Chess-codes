@@ -101,7 +101,8 @@ const ChessBoard = ({
   inCheckPlayerIds,
 }: ChessBoardProps) => {
 
-  const [animationClass, setAnimationClass] = useState('');
+  const [turnAnimationClass, setTurnAnimationClass] = useState('');
+  const [checkAnimationClass, setCheckAnimationClass] = useState('');
   
   const isMyTurn = perspective === currentPlayerId;
   const amIInCheck = inCheckPlayerIds.includes(perspective);
@@ -109,28 +110,34 @@ const ChessBoard = ({
   const prevIsMyTurnRef = useRef(isMyTurn);
   const prevAmIInCheckRef = useRef(amIInCheck);
 
+  // Effect for turn-based animation
   useEffect(() => {
     const wasMyTurn = prevIsMyTurnRef.current;
-    const wasIInCheck = prevAmIInCheckRef.current;
-    
-    let timer: NodeJS.Timeout | undefined;
-
-    // A check alert takes priority over a turn alert
-    if (amIInCheck && !wasIInCheck) { // Just got into check
-        setAnimationClass('animate-check-flash');
-        timer = setTimeout(() => setAnimationClass(''), 400); // Remove class after animation
-    } else if (isMyTurn && !wasMyTurn) { // Just became my turn
-        setAnimationClass('animate-turn-flash');
-        timer = setTimeout(() => setAnimationClass(''), 400); // Remove class after animation
+    if (isMyTurn && !wasMyTurn) {
+      // It just became my turn, trigger the flash and glow animation
+      setTurnAnimationClass('animate-turn-flash');
+    } else if (!isMyTurn && turnAnimationClass) {
+      // It's no longer my turn, remove the animation class
+      setTurnAnimationClass('');
     }
-
     prevIsMyTurnRef.current = isMyTurn;
+  }, [isMyTurn, turnAnimationClass]);
+
+  // Effect for check-based animation
+  useEffect(() => {
+    const wasIInCheck = prevAmIInCheckRef.current;
+    let timer: NodeJS.Timeout;
+    if (amIInCheck && !wasIInCheck) {
+      // I was just put in check, trigger the flash animation
+      setCheckAnimationClass('animate-check-flash');
+      timer = setTimeout(() => setCheckAnimationClass(''), 400); // Duration of the flash
+    }
     prevAmIInCheckRef.current = amIInCheck;
 
     return () => {
       if (timer) clearTimeout(timer);
-    };
-  }, [isMyTurn, amIInCheck]);
+    }
+  }, [amIInCheck]);
 
 
   const kingInCheckSquares = useMemo(() => {
@@ -154,7 +161,8 @@ const ChessBoard = ({
   return (
     <div className={cn(
         "aspect-square w-full bg-card p-2 rounded-lg shadow-lg transition-all duration-300",
-        animationClass
+        turnAnimationClass,
+        checkAnimationClass
     )}>
       <div className="relative h-full w-full">
         {/* Board grid for interaction */}

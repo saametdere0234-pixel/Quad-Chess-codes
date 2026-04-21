@@ -90,7 +90,7 @@ export default {
         },
         'turn-flash': {
             '0%': { boxShadow: '0 0 35px 12px rgba(96, 165, 250, 0.9)' },
-            '100%': { boxShadow: 'none' },
+            '100%': { boxShadow: '0 0 15px 5px rgba(96, 165, 250, 0.5)' },
         },
         'check-flash': {
             '0%': { boxShadow: '0 0 35px 12px rgba(248, 113, 113, 0.9)' },
@@ -100,7 +100,7 @@ export default {
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
-        'turn-flash': 'turn-flash 0.4s ease-out',
+        'turn-flash': 'turn-flash 0.5s ease-out forwards',
         'check-flash': 'check-flash 0.4s ease-out',
       },
     },
