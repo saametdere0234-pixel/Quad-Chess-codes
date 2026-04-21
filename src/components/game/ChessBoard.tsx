@@ -115,22 +115,13 @@ const ChessBoard = ({
     
     let timer: NodeJS.Timeout | undefined;
 
-    if (amIInCheck) {
-      if (!wasIInCheck) { // Just got into check
+    // A check alert takes priority over a turn alert
+    if (amIInCheck && !wasIInCheck) { // Just got into check
         setAnimationClass('animate-check-flash');
-        timer = setTimeout(() => setAnimationClass('animate-check-glow'), 400);
-      } else { // Already in check
-        setAnimationClass(current => (current === 'animate-check-glow' ? current : 'animate-check-glow'));
-      }
-    } else if (isMyTurn) {
-      if (!wasMyTurn) { // Just became my turn
+        timer = setTimeout(() => setAnimationClass(''), 400); // Remove class after animation
+    } else if (isMyTurn && !wasMyTurn) { // Just became my turn
         setAnimationClass('animate-turn-flash');
-        timer = setTimeout(() => setAnimationClass('animate-turn-glow'), 400);
-      } else { // Still my turn
-        setAnimationClass(current => (current === 'animate-turn-glow' ? current : 'animate-turn-glow'));
-      }
-    } else {
-      setAnimationClass(''); // Not my turn and not in check
+        timer = setTimeout(() => setAnimationClass(''), 400); // Remove class after animation
     }
 
     prevIsMyTurnRef.current = isMyTurn;

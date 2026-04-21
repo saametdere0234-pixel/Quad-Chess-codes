@@ -101,8 +101,8 @@ export default function RoomPage() {
 
 
   const handleStartGame = async () => {
-    if (!roomRef || !roomData?.players || Object.keys(roomData.players).length !== 4) {
-        alert("You need 4 players to start the game.");
+    if (!roomRef || !roomData?.players || Object.keys(roomData.players).length < 2) {
+        alert("You need at least 2 players to start the game.");
         return;
     }
 
@@ -209,18 +209,23 @@ export default function RoomPage() {
   }, [roomRef, userId, router]);
 
   useEffect(() => {
-    // This handles leaving the tab/browser
-    const handleBeforeUnload = () => {
-      // Note: This is best-effort and might not always run, especially on mobile browsers.
-      // A more robust solution might involve server-side heartbeats or cleanup functions.
-      // For this project, we accept the limitation.
-      handleLeaveRoom();
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+        if (!roomRef || !userId) return;
+        runTransaction(roomRef, (currentData) => {
+            if (currentData && currentData.players && currentData.players[userId]) {
+                delete currentData.players[userId];
+                if (Object.keys(currentData.players).length === 0) {
+                    return null;
+                }
+            }
+            return currentData;
+        });
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [handleLeaveRoom]);
+  }, [roomRef, userId, handleLeaveRoom]);
 
 
   if (roomLoading || !roomData || userRole === 'joining' || !userId) {
@@ -264,22 +269,20 @@ export default function RoomPage() {
         <div className="flex flex-col items-center">
             {isHost && userRole === 'player' && (
               <>
-                <Button onClick={handleStartGame} disabled={sortedPlayers.length !== 4}>
+                <Button onClick={handleStartGame} disabled={sortedPlayers.length < 2}>
                   Start Game ({sortedPlayers.length}/4 players)
                 </Button>
-                {sortedPlayers.length !== 4 && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    You need 4 players to start the game.
-                  </p>
-                )}
+                <p className="text-sm text-muted-foreground mt-2">
+                  You can start with 2-4 players.
+                </p>
               </>
             )}
-            {(!isHost || userRole !== 'player') && (
+            {!isHost && userRole === 'player' && (
                 <p className="text-muted-foreground">Waiting for the host to start the game...</p>
             )}
         </div>
 
-         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Back to Lobby</Button>
+         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Leave Room</Button>
       </div>
     );
   }
