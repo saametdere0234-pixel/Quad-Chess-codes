@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils';
 import type { Board, Move, Piece, PlayerId } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS, BOARD_SIZE } from '@/lib/game/constants';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState, useEffect, useRef } from 'react';
 
 interface ChessBoardProps {
   board: Board;
@@ -101,8 +101,41 @@ const ChessBoard = ({
   inCheckPlayerIds,
 }: ChessBoardProps) => {
 
+  const [animationClass, setAnimationClass] = useState('');
+  
   const isMyTurn = perspective === currentPlayerId;
   const amIInCheck = inCheckPlayerIds.includes(perspective);
+  
+  const prevIsMyTurnRef = useRef(isMyTurn);
+  const prevAmIInCheckRef = useRef(amIInCheck);
+
+  useEffect(() => {
+    // Determine animation based on state changes
+    if (amIInCheck) {
+      if (!prevAmIInCheckRef.current) { // Just got into check
+        setAnimationClass('animate-check-flash');
+        const timer = setTimeout(() => setAnimationClass('animate-check-glow'), 400);
+        return () => clearTimeout(timer);
+      } else if (animationClass !== 'animate-check-glow' && animationClass !== 'animate-check-flash') {
+        setAnimationClass('animate-check-glow'); // Already in check, just glow
+      }
+    } else if (isMyTurn) {
+      if (!prevIsMyTurnRef.current) { // Just became my turn
+        setAnimationClass('animate-turn-flash');
+        const timer = setTimeout(() => setAnimationClass('animate-turn-glow'), 400);
+        return () => clearTimeout(timer);
+      } else if (animationClass !== 'animate-turn-glow' && animationClass !== 'animate-turn-flash') {
+        setAnimationClass('animate-turn-glow'); // Still my turn, just glow
+      }
+    } else {
+      setAnimationClass(''); // Not my turn, not in check
+    }
+
+    // Update refs for the next render
+    prevIsMyTurnRef.current = isMyTurn;
+    prevAmIInCheckRef.current = amIInCheck;
+  }, [isMyTurn, amIInCheck, animationClass]);
+
 
   const kingInCheckSquares = useMemo(() => {
     const squares: {row: number, col: number}[] = [];
@@ -125,8 +158,7 @@ const ChessBoard = ({
   return (
     <div className={cn(
         "aspect-square w-full bg-card p-2 rounded-lg shadow-lg transition-all duration-300",
-        isMyTurn && !amIInCheck && "shadow-[0_0_15px_4px_rgba(59,130,246,0.4)]",
-        amIInCheck && "shadow-[0_0_15px_4px_rgba(239,68,68,0.4)]"
+        animationClass
     )}>
       <div className="relative h-full w-full">
         {/* Board grid for interaction */}

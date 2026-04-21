@@ -138,62 +138,65 @@ export default function RoomPage() {
     if (!roomRef || !userId) return;
 
     runTransaction(roomRef, (currentData) => {
-        if (!currentData) return null;
+        if (!currentData || !currentData.players || !currentData.players[userId]) {
+            return; // Abort if room or player doesn't exist.
+        }
 
-        const isPlayer = currentData.players && currentData.players[userId];
+        const playerInfo = currentData.players[userId];
+        const playerToRemoveId = playerInfo.playerId;
         
-        if (isPlayer) {
-            const playerToRemoveId = currentData.players[userId].playerId;
-            delete currentData.players[userId];
+        // Always remove the player from the list
+        delete currentData.players[userId];
 
-            if (currentData.status === 'in-progress' && playerToRemoveId) {
-                const gameState = JSON.parse(currentData.gameState);
-                if (gameState && !gameState.eliminatedPlayerIds.includes(playerToRemoveId)) {
-                    gameState.eliminatedPlayerIds.push(playerToRemoveId);
-                    
-                    // Remove player's pieces from the board
-                    for (let r = 0; r < 14; r++) {
-                        for (let c = 0; c < 14; c++) {
-                          if (gameState.board[r][c].piece && gameState.board[r][c].piece.player === playerToRemoveId) {
+        // If the game is in progress, handle elimination logic
+        if (currentData.status === 'in-progress' && playerToRemoveId) {
+            let gameState = JSON.parse(currentData.gameState);
+
+            if (gameState && !gameState.eliminatedPlayerIds.includes(playerToRemoveId)) {
+                gameState.eliminatedPlayerIds.push(playerToRemoveId);
+                
+                // Remove player's pieces
+                for (let r = 0; r < 14; r++) {
+                    for (let c = 0; c < 14; c++) {
+                        if (gameState.board[r][c].piece?.player === playerToRemoveId) {
                             gameState.board[r][c].piece = null;
-                          }
                         }
                     }
-
-                    const activePlayers = gameState.players.filter((p: Player) => !gameState.eliminatedPlayerIds.includes(p.id));
-                    if (activePlayers.length <= 1) {
-                        gameState.winner = activePlayers[0]?.id || null;
-                        gameState.status = 'finished';
-                        currentData.status = 'finished';
-                    } else {
-                        // Advance turn if the leaving player was the current player
-                        if (gameState.players[gameState.currentPlayerIndex].id === playerToRemoveId) {
-                            let nextPlayerIndex = gameState.currentPlayerIndex;
-                            do {
-                                nextPlayerIndex = (nextPlayerIndex + 1) % gameState.players.length;
-                            } while (gameState.eliminatedPlayerIds.includes(gameState.players[nextPlayerIndex].id));
-                            gameState.currentPlayerIndex = nextPlayerIndex;
-                        }
-                    }
-                    
-                    // Re-calculate checks
-                    const activePlayerIds = gameState.players
-                        .map((p: Player) => p.id)
-                        .filter((id: PlayerId) => !gameState.eliminatedPlayerIds.includes(id));
-                    
-                    gameState.inCheckPlayerIds = activePlayerIds.filter((playerId: PlayerId) => 
-                        isPlayerInCheck(playerId, gameState.board)
-                    );
-
-                    currentData.gameState = JSON.stringify(gameState);
                 }
+
+                // Check for game end condition
+                const activePlayers = gameState.players.filter((p: Player) => !gameState.eliminatedPlayerIds.includes(p.id));
+                if (activePlayers.length <= 1) {
+                    gameState.winner = activePlayers[0]?.id || null;
+                    gameState.status = 'finished';
+                    currentData.status = 'finished';
+                } else {
+                    // Advance turn if the leaving player was the current player
+                    if (gameState.players[gameState.currentPlayerIndex].id === playerToRemoveId) {
+                        let nextPlayerIndex = gameState.currentPlayerIndex;
+                        do {
+                            nextPlayerIndex = (nextPlayerIndex + 1) % gameState.players.length;
+                        } while (gameState.eliminatedPlayerIds.includes(gameState.players[nextPlayerIndex].id));
+                        gameState.currentPlayerIndex = nextPlayerIndex;
+                    }
+                }
+                
+                // Recalculate checks
+                const activePlayerIds = gameState.players
+                    .map((p: Player) => p.id)
+                    .filter((id: PlayerId) => !gameState.eliminatedPlayerIds.includes(id));
+                
+                gameState.inCheckPlayerIds = activePlayerIds.filter((playerId: PlayerId) => 
+                    isPlayerInCheck(playerId, gameState.board)
+                );
+
+                currentData.gameState = JSON.stringify(gameState);
             }
         }
         
-        const remainingPlayers = currentData.players ? Object.keys(currentData.players).length : 0;
-
-        if (remainingPlayers === 0) {
-            return null; // This will delete the room
+        // If the room is now empty, mark it for deletion
+        if (Object.keys(currentData.players).length === 0) {
+            return null; 
         }
         
         return currentData;
