@@ -19,7 +19,11 @@ export default function RoomPage() {
   const [userRole, setUserRole] = useState<'joining' | 'player'>('joining');
 
   useEffect(() => {
-    setUser(getLocalUser());
+    // Safely get user info on the client
+    const localUser = getLocalUser();
+    if (localUser.userId) {
+        setUser(localUser);
+    }
   }, []);
   
   const { userId, nickname } = user;
@@ -64,9 +68,16 @@ export default function RoomPage() {
       const playerCount = Object.keys(players).length;
 
       if (currentData.status === 'waiting' && playerCount < 4) {
-        const assignedPlayerId = PLAYER_IDS[playerCount];
-        players[userId] = { userId, nickname, playerId: assignedPlayerId };
-        currentData.players = players;
+        const existingPlayerIds = Object.values(players).map((p: any) => p.playerId);
+        const availablePlayerId = PLAYER_IDS.find(id => !existingPlayerIds.includes(id));
+        
+        if (availablePlayerId) {
+            players[userId] = { userId, nickname, playerId: availablePlayerId };
+            currentData.players = players;
+        } else {
+            // No available slot, abort.
+            return;
+        }
       } else {
         // Abort transaction if room is full or started while we were trying to join
         return; 
@@ -176,6 +187,9 @@ export default function RoomPage() {
   useEffect(() => {
     // This handles leaving the tab/browser
     const handleBeforeUnload = () => {
+      // Note: This is best-effort and might not always run, especially on mobile browsers.
+      // A more robust solution might involve server-side heartbeats or cleanup functions.
+      // For this project, we accept the limitation.
       handleLeaveRoom();
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
