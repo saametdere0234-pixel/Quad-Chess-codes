@@ -101,8 +101,8 @@ export default function RoomPage() {
 
 
   const handleStartGame = async () => {
-    if (!roomRef || !roomData?.players || Object.keys(roomData.players).length < 2) {
-        alert("You need at least 2 players to start the game.");
+    if (!roomRef || !roomData?.players || Object.keys(roomData.players).length !== 4) {
+        alert("You need exactly 4 players to start the game.");
         return;
     }
 
@@ -138,24 +138,26 @@ export default function RoomPage() {
     if (!roomRef || !userId) return;
 
     runTransaction(roomRef, (currentData) => {
+        // If room doesn't exist or we're not in it, there's nothing to do.
         if (!currentData || !currentData.players || !currentData.players[userId]) {
-            return; // Abort if room or player doesn't exist.
+            return; // Abort transaction if we're not in the room.
         }
 
+        // Capture player details before deletion
         const playerInfo = currentData.players[userId];
         const playerToRemoveId = playerInfo.playerId;
         
-        // Always remove the player from the list
+        // Remove the player from the player list
         delete currentData.players[userId];
 
-        // If the game is in progress, handle elimination logic
+        // If the game is in progress, handle board cleanup and turn progression
         if (currentData.status === 'in-progress' && playerToRemoveId) {
             let gameState = JSON.parse(currentData.gameState);
 
             if (gameState && !gameState.eliminatedPlayerIds.includes(playerToRemoveId)) {
                 gameState.eliminatedPlayerIds.push(playerToRemoveId);
                 
-                // Remove player's pieces
+                // Remove player's pieces from the board
                 for (let r = 0; r < 14; r++) {
                     for (let c = 0; c < 14; c++) {
                         if (gameState.board[r][c].piece?.player === playerToRemoveId) {
@@ -164,7 +166,7 @@ export default function RoomPage() {
                     }
                 }
 
-                // Check for game end condition
+                // Check if the game should end
                 const activePlayers = gameState.players.filter((p: Player) => !gameState.eliminatedPlayerIds.includes(p.id));
                 if (activePlayers.length <= 1) {
                     gameState.winner = activePlayers[0]?.id || null;
@@ -181,7 +183,7 @@ export default function RoomPage() {
                     }
                 }
                 
-                // Recalculate checks
+                // Recalculate which players are in check
                 const activePlayerIds = gameState.players
                     .map((p: Player) => p.id)
                     .filter((id: PlayerId) => !gameState.eliminatedPlayerIds.includes(id));
@@ -194,17 +196,26 @@ export default function RoomPage() {
             }
         }
         
-        // If the room is now empty, mark it for deletion
+        // If the room is now empty, delete it by returning null
         if (Object.keys(currentData.players).length === 0) {
             return null; 
         }
         
+        // Otherwise, return the updated room data
         return currentData;
-    }).then(() => {
-        router.push('/lobby');
+    }).then(({ committed }) => {
+        // IMPORTANT: Only navigate away if the transaction was successful
+        if (committed) {
+            router.push('/lobby');
+        } else {
+            // This might happen if the room was deleted by another user, or some other race condition.
+            // Alert the user and send them to the lobby anyway to prevent them from being stuck.
+            alert("Could not leave the room. It might have been modified or deleted by someone else.");
+            router.push('/lobby');
+        }
     }).catch(error => {
         console.error("Error leaving room:", error);
-        alert("There was an error trying to leave the room.");
+        alert("An error occurred while trying to leave the room. Please try again.");
     });
   }, [roomRef, userId, router]);
 
@@ -250,11 +261,11 @@ export default function RoomPage() {
         <div className="flex flex-col items-center">
             {isHost && userRole === 'player' && (
               <>
-                <Button onClick={handleStartGame} disabled={sortedPlayers.length < 2}>
+                <Button onClick={handleStartGame} disabled={sortedPlayers.length !== 4}>
                   Start Game ({sortedPlayers.length}/4 players)
                 </Button>
                 <p className="text-sm text-muted-foreground mt-2">
-                  You can start with 2-4 players.
+                  You need 4 players to start.
                 </p>
               </>
             )}
@@ -263,7 +274,7 @@ export default function RoomPage() {
             )}
         </div>
 
-         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Back to Lobby</Button>
+         <Button variant="link" onClick={handleLeaveRoom} className="mt-4">Leave Room</Button>
       </div>
     );
   }
