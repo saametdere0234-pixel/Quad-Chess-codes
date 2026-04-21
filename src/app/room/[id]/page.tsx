@@ -9,7 +9,8 @@ import { getLocalUser } from '@/lib/user';
 import { PLAYER_IDS, PLAYERS } from '@/lib/game/constants';
 import { Button } from '@/components/ui/button';
 import { Loader2, Users } from 'lucide-react';
-import type { Player } from '@/lib/game/types';
+import type { Player, PlayerId } from '@/lib/game/types';
+import { isPlayerInCheck } from '@/lib/game/logic';
 
 export default function RoomPage() {
   const params = useParams();
@@ -150,6 +151,15 @@ export default function RoomPage() {
                 if (gameState && !gameState.eliminatedPlayerIds.includes(playerToRemoveId)) {
                     gameState.eliminatedPlayerIds.push(playerToRemoveId);
                     
+                    // Remove player's pieces from the board
+                    for (let r = 0; r < 14; r++) {
+                        for (let c = 0; c < 14; c++) {
+                          if (gameState.board[r][c].piece && gameState.board[r][c].piece.player === playerToRemoveId) {
+                            gameState.board[r][c].piece = null;
+                          }
+                        }
+                    }
+
                     const activePlayers = gameState.players.filter((p: Player) => !gameState.eliminatedPlayerIds.includes(p.id));
                     if (activePlayers.length <= 1) {
                         gameState.winner = activePlayers[0]?.id || null;
@@ -165,6 +175,16 @@ export default function RoomPage() {
                             gameState.currentPlayerIndex = nextPlayerIndex;
                         }
                     }
+                    
+                    // Re-calculate checks
+                    const activePlayerIds = gameState.players
+                        .map((p: Player) => p.id)
+                        .filter((id: PlayerId) => !gameState.eliminatedPlayerIds.includes(id));
+                    
+                    gameState.inCheckPlayerIds = activePlayerIds.filter((playerId: PlayerId) => 
+                        isPlayerInCheck(playerId, gameState.board)
+                    );
+
                     currentData.gameState = JSON.stringify(gameState);
                 }
             }
