@@ -30,7 +30,7 @@ const Square = memo(function Square({ isLightSquare, isSelected, isValidMove, is
             'relative flex items-center justify-center w-full h-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring',
             isLightSquare ? 'bg-secondary' : 'bg-muted',
             isSelected && 'bg-accent/50 ring-2 ring-accent',
-            isLastMove && 'bg-primary/20',
+            isLastMove && 'bg-chart-4/50',
             'hover:bg-accent/30'
           )}
           aria-label={`Square`}
