@@ -154,6 +154,7 @@ export default function RoomPage() {
                     if (activePlayers.length <= 1) {
                         gameState.winner = activePlayers[0]?.id || null;
                         gameState.status = 'finished';
+                        currentData.status = 'finished';
                     } else {
                         // Advance turn if the leaving player was the current player
                         if (gameState.players[gameState.currentPlayerIndex].id === playerToRemoveId) {
