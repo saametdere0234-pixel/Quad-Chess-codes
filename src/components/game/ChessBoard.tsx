@@ -110,31 +110,36 @@ const ChessBoard = ({
   const prevAmIInCheckRef = useRef(amIInCheck);
 
   useEffect(() => {
-    // Determine animation based on state changes
+    const wasMyTurn = prevIsMyTurnRef.current;
+    const wasIInCheck = prevAmIInCheckRef.current;
+    
+    let timer: NodeJS.Timeout | undefined;
+
     if (amIInCheck) {
-      if (!prevAmIInCheckRef.current) { // Just got into check
+      if (!wasIInCheck) { // Just got into check
         setAnimationClass('animate-check-flash');
-        const timer = setTimeout(() => setAnimationClass('animate-check-glow'), 400);
-        return () => clearTimeout(timer);
-      } else if (animationClass !== 'animate-check-glow' && animationClass !== 'animate-check-flash') {
-        setAnimationClass('animate-check-glow'); // Already in check, just glow
+        timer = setTimeout(() => setAnimationClass('animate-check-glow'), 400);
+      } else { // Already in check
+        setAnimationClass(current => (current === 'animate-check-glow' ? current : 'animate-check-glow'));
       }
     } else if (isMyTurn) {
-      if (!prevIsMyTurnRef.current) { // Just became my turn
+      if (!wasMyTurn) { // Just became my turn
         setAnimationClass('animate-turn-flash');
-        const timer = setTimeout(() => setAnimationClass('animate-turn-glow'), 400);
-        return () => clearTimeout(timer);
-      } else if (animationClass !== 'animate-turn-glow' && animationClass !== 'animate-turn-flash') {
-        setAnimationClass('animate-turn-glow'); // Still my turn, just glow
+        timer = setTimeout(() => setAnimationClass('animate-turn-glow'), 400);
+      } else { // Still my turn
+        setAnimationClass(current => (current === 'animate-turn-glow' ? current : 'animate-turn-glow'));
       }
     } else {
-      setAnimationClass(''); // Not my turn, not in check
+      setAnimationClass(''); // Not my turn and not in check
     }
 
-    // Update refs for the next render
     prevIsMyTurnRef.current = isMyTurn;
     prevAmIInCheckRef.current = amIInCheck;
-  }, [isMyTurn, amIInCheck, animationClass]);
+
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isMyTurn, amIInCheck]);
 
 
   const kingInCheckSquares = useMemo(() => {
