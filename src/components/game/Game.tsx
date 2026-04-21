@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { produce } from 'immer';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
+import ChatBox from './ChatBox';
 import PromotionDialog from './PromotionDialog';
 import { createInitialBoard, getValidMoves, isPlayerInCheck } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board, PieceType, Player } from '@/lib/game/types';
@@ -33,9 +34,9 @@ function getRotatedBoard(board: Board, playerId: PlayerId): Board {
 function getOriginalCoords(row: number, col: number, playerId: PlayerId, size: number): { row: number; col: number } {
   switch (playerId) {
     case 'Red': return { row, col };
-    case 'Green': return { row: col, col: size - 1 - row }; // 270 deg CW
+    case 'Green': return { row: size - 1 - col, col: row }; // 90 deg CCW is reverse of 90 deg CW
     case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg
-    case 'Yellow': return { row: size - 1 - col, col: row }; // 90 deg CW
+    case 'Yellow': return { row: col, col: size - 1 - row }; // 270 deg CCW is reverse of 270 deg CW
     default: return { row, col };
   }
 }
@@ -44,9 +45,9 @@ function getRotatedCoords(row: number, col: number, playerId: PlayerId, size: nu
     if (row === -1 || col === -1) return {row, col};
     switch (playerId) {
         case 'Red': return { row, col }; // 0 deg
-        case 'Green': return { row: size - 1 - col, col: row }; // 90 deg CCW
+        case 'Green': return { row: col, col: size - 1 - row }; // 90 deg CW
         case 'Blue': return { row: size - 1 - row, col: size - 1 - col }; // 180 deg
-        case 'Yellow': return { row: col, col: size - 1 - row }; // 270 deg CCW
+        case 'Yellow': return { row: size - 1 - col, col: row }; // 270 deg CW (or 90 CCW)
         default: return { row, col };
     }
 }
@@ -60,7 +61,7 @@ interface GameProps {
 }
 
 export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GameProps) {
-  const { userId } = getLocalUser();
+  const { userId, nickname } = getLocalUser();
   const { toast } = useToast();
 
   const gameState = useMemo<GameState | null>(() => {
@@ -299,16 +300,14 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
     const isMoveValid = validMovesForPiece.some(move => move.row === to.row && move.col === to.col);
 
     if (isMoveValid) {
-      const isPromotion = fromPiece.type === 'Pawn' && (
-        to.row <= 1 || to.row >= 12 || to.col <= 1 || to.col >= 12
+       const isPromotion = fromPiece.type === 'Pawn' && (
+        (fromPiece.player === 'Red' && to.row <= 1) ||
+        (fromPiece.player === 'Blue' && to.row >= 12) ||
+        (fromPiece.player === 'Yellow' && to.col >= 12) ||
+        (fromPiece.player === 'Green' && to.col <= 1)
       );
       
-      const isFinalRank = (fromPiece.player === 'Red' && to.row <= 1) ||
-                          (fromPiece.player === 'Blue' && to.row >= 12) ||
-                          (fromPiece.player === 'Yellow' && to.col >= 12) ||
-                          (fromPiece.player === 'Green' && to.col <= 1);
-      
-      if (isPromotion && isFinalRank) {
+      if (isPromotion) {
           setPromotionMove({ from, to });
       } else {
           applyMove(from, to);
@@ -387,6 +386,14 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
           players={gameState.players}
           inCheckPlayerIds={inCheckPlayerIds}
         />
+        {userId && nickname && gameState?.players && roomData?.players && (
+            <ChatBox
+                roomId={roomId}
+                user={{userId, nickname}}
+                roomPlayers={roomData.players}
+                gamePlayers={gameState.players}
+            />
+        )}
       </div>
       {promotionMove && currentPlayer && (
         <PromotionDialog
