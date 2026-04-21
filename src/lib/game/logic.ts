@@ -65,6 +65,48 @@ const canMoveTo = (square: Square | undefined, currentPlayerId: PlayerId) => {
     return square.piece === null || square.piece.player !== currentPlayerId;
 }
 
+export const isPlayerInCheck = (playerId: PlayerId, board: Board): boolean => {
+    let kingPosition: { row: number; col: number } | null = null;
+
+    // Find the king's position
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            const piece = board[r][c].piece;
+            if (piece && piece.type === 'King' && piece.player === playerId) {
+                kingPosition = { row: r, col: c };
+                break;
+            }
+        }
+        if (kingPosition) break;
+    }
+
+    if (!kingPosition) {
+        // King not on board, so not in check (or already captured)
+        return false;
+    }
+
+    // Check if any opponent piece can attack the king's square
+    for (let r = 0; r < BOARD_SIZE; r++) {
+        for (let c = 0; c < BOARD_SIZE; c++) {
+            const piece = board[r][c].piece;
+            if (piece && piece.player !== playerId && !board[r][c].isActive) continue;
+
+            if (piece && piece.player !== playerId) {
+                // We need a "raw" version of getValidMoves that doesn't check for king safety,
+                // to avoid infinite loops. The current `getValidMoves` is exactly that.
+                const moves = getValidMoves(r, c, { board, enPassantTarget: null } as GameState); // Pass a simplified state
+                for (const move of moves) {
+                    if (move.row === kingPosition.row && move.col === kingPosition.col) {
+                        return true; // The king is in check
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+};
+
 export const getValidMoves = (row: number, col: number, gameState: GameState): { row: number, col: number }[] => {
   const { board, enPassantTarget } = gameState;
   const piece = board[row][col].piece;

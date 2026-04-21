@@ -1,9 +1,9 @@
 'use client';
 
 import { cn } from '@/lib/utils';
-import type { Board, Move, Piece } from '@/lib/game/types';
+import type { Board, Move, Piece, PlayerId } from '@/lib/game/types';
 import { PIECE_EMOJIS, PLAYERS, BOARD_SIZE } from '@/lib/game/constants';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 
 interface ChessBoardProps {
   board: Board;
@@ -11,6 +11,9 @@ interface ChessBoardProps {
   selectedSquare: { row: number; col: number } | null;
   validMoves: { row: number; col: number }[];
   lastMove: Move | null;
+  perspective: PlayerId;
+  currentPlayerId: PlayerId;
+  inCheckPlayerIds: PlayerId[];
 }
 
 interface SquareProps {
@@ -18,11 +21,12 @@ interface SquareProps {
     isSelected: boolean;
     isValidMove: boolean;
     isLastMove: boolean;
+    isCheckKingSquare: boolean;
     onClick: () => void;
     hasPiece: boolean;
 }
 
-const Square = memo(function Square({ isLightSquare, isSelected, isValidMove, isLastMove, onClick, hasPiece }: SquareProps) {
+const Square = memo(function Square({ isLightSquare, isSelected, isValidMove, isLastMove, isCheckKingSquare, onClick, hasPiece }: SquareProps) {
     return (
         <button
           onClick={onClick}
@@ -30,7 +34,8 @@ const Square = memo(function Square({ isLightSquare, isSelected, isValidMove, is
             'relative flex items-center justify-center w-full h-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-ring',
             isLightSquare ? 'bg-secondary' : 'bg-muted',
             isSelected && 'bg-accent/50 ring-2 ring-accent',
-            isLastMove && 'bg-chart-4/50',
+            isLastMove && 'bg-yellow-300/60',
+            isCheckKingSquare && 'bg-red-500/40',
             'hover:bg-accent/30'
           )}
           aria-label={`Square`}
@@ -91,10 +96,38 @@ const ChessBoard = ({
   selectedSquare,
   validMoves,
   lastMove,
+  perspective,
+  currentPlayerId,
+  inCheckPlayerIds,
 }: ChessBoardProps) => {
+
+  const isMyTurn = perspective === currentPlayerId;
+  const amIInCheck = inCheckPlayerIds.includes(perspective);
+
+  const kingInCheckSquares = useMemo(() => {
+    const squares: {row: number, col: number}[] = [];
+    if (inCheckPlayerIds.length === 0) return squares;
+
+    for (const playerId of inCheckPlayerIds) {
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                const square = board[r][c];
+                if (square?.piece && square.piece.type === 'King' && square.piece.player === playerId) {
+                    squares.push({ row: square.row, col: square.col });
+                    break; 
+                }
+            }
+        }
+    }
+    return squares;
+  }, [board, inCheckPlayerIds]);
   
   return (
-    <div className="aspect-square w-full bg-card p-2 rounded-lg shadow-lg">
+    <div className={cn(
+        "aspect-square w-full bg-card p-2 rounded-lg shadow-lg transition-all duration-300",
+        isMyTurn && !amIInCheck && "shadow-[0_0_15px_4px_rgba(59,130,246,0.4)]",
+        amIInCheck && "shadow-[0_0_15px_4px_rgba(239,68,68,0.4)]"
+    )}>
       <div className="relative h-full w-full">
         {/* Board grid for interaction */}
         <div className="grid plus-shape-grid h-full w-full">
@@ -109,6 +142,9 @@ const ChessBoard = ({
               const isLastMove = (lastMove?.from.row === square.row && lastMove?.from.col === square.col) ||
                                   (lastMove?.to.row === square.row && lastMove?.to.col === square.col);
               const isLightSquare = (rowIndex + colIndex) % 2 === 0;
+              const isCheckKingSquare = kingInCheckSquares.some(
+                kingSquare => kingSquare.row === square.row && kingSquare.col === square.col
+              );
 
               return (
                 <Square
@@ -117,6 +153,7 @@ const ChessBoard = ({
                   isSelected={isSelected}
                   isValidMove={isValidMove}
                   isLastMove={isLastMove}
+                  isCheckKingSquare={isCheckKingSquare}
                   onClick={() => onSquareClick(rowIndex, colIndex)}
                   hasPiece={!!square.piece}
                 />

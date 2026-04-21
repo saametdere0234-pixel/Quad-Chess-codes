@@ -5,7 +5,7 @@ import { produce } from 'immer';
 import ChessBoard from './ChessBoard';
 import GameInfoPanel from './GameInfoPanel';
 import PromotionDialog from './PromotionDialog';
-import { createInitialBoard, getValidMoves } from '@/lib/game/logic';
+import { createInitialBoard, getValidMoves, isPlayerInCheck } from '@/lib/game/logic';
 import type { GameState, Move, Piece, PlayerId, Board, PieceType, Player } from '@/lib/game/types';
 import { BOARD_SIZE, PLAYER_IDS } from '@/lib/game/constants';
 import { useToast } from "@/hooks/use-toast";
@@ -264,6 +264,14 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
 
         const activePlayers = draft.players.filter(p => !draft.eliminatedPlayerIds.includes(p.id));
 
+        const activePlayerIds = draft.players
+            .map(p => p.id)
+            .filter(id => !draft.eliminatedPlayerIds.includes(id));
+            
+        draft.inCheckPlayerIds = activePlayerIds.filter(playerId => 
+            isPlayerInCheck(playerId, draft.board)
+        );
+
         if (activePlayers.length <= 1) {
             draft.winner = activePlayers[0]?.id || null;
             draft.status = 'finished';
@@ -350,6 +358,7 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
   const currentPlayer = gameState.players[gameState.currentPlayerIndex];
   const eliminatedPlayers = gameState.players.filter(p => gameState.eliminatedPlayerIds.includes(p.id));
   const winner = gameState.players.find(p => p.id === gameState.winner);
+  const inCheckPlayerIds = gameState.inCheckPlayerIds || [];
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative">
@@ -363,6 +372,9 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
           selectedSquare={displaySelectedSquare}
           validMoves={validMoves}
           lastMove={displayLastMove}
+          perspective={perspective}
+          currentPlayerId={currentPlayer.id}
+          inCheckPlayerIds={inCheckPlayerIds}
         />
       </div>
       <div>
@@ -373,6 +385,7 @@ export default function Game({ roomId, onLeaveRoom, userRole, roomData }: GamePr
           onLeaveRoom={onLeaveRoom}
           capturedPieces={gameState.capturedPieces}
           players={gameState.players}
+          inCheckPlayerIds={inCheckPlayerIds}
         />
       </div>
       {promotionMove && currentPlayer && (

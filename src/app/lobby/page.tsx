@@ -59,6 +59,7 @@ export default function LobbyPage() {
       currentPlayerIndex: 0,
       players: [],
       eliminatedPlayerIds: [],
+      inCheckPlayerIds: [],
       winner: null,
       lastMove: null,
       enPassantTarget: null,

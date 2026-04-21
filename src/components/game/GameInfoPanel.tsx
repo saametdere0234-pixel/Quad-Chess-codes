@@ -16,6 +16,7 @@ interface GameInfoPanelProps {
   onLeaveRoom: () => void;
   capturedPieces: { [key in PlayerId]?: Piece[] };
   players: Player[];
+  inCheckPlayerIds: PlayerId[];
 }
 
 const CapturedPiece = ({ piece }: { piece: Piece }) => {
@@ -44,8 +45,11 @@ export default function GameInfoPanel({
   onLeaveRoom,
   capturedPieces,
   players,
+  inCheckPlayerIds,
 }: GameInfoPanelProps) {
   
+  const isCurrentPlayerInCheck = inCheckPlayerIds.includes(currentPlayer.id);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -82,6 +86,7 @@ export default function GameInfoPanel({
                   style={{ backgroundColor: currentPlayer.color }}
                 />
                 <p className="font-semibold text-lg">{currentPlayer.name}</p>
+                {isCurrentPlayerInCheck && <span className="font-bold text-destructive text-lg ml-2">Check!</span>}
               </div>
             </div>
           )}
@@ -119,26 +124,30 @@ export default function GameInfoPanel({
         <CardContent>
             <ScrollArea className="h-48">
                 <div className='space-y-3'>
-                {players.map(player => (
-                    <div key={player.id}>
-                        <div className="flex items-center space-x-2 mb-1">
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: player.color }}/>
-                            <p className="text-xs font-semibold">{player.name}</p>
+                {players.map(player => {
+                    const isInCheck = inCheckPlayerIds.includes(player.id);
+                    return (
+                        <div key={player.id}>
+                            <div className="flex items-center space-x-2 mb-1">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: player.color }}/>
+                                <p className="text-xs font-semibold">{player.name}</p>
+                                {isInCheck && <p className="text-xs font-bold text-destructive">CHECK!</p>}
+                            </div>
+                            <div className={cn(
+                                "flex flex-wrap gap-1 p-2 rounded-md min-h-[36px]",
+                                (capturedPieces[player.id]?.length ?? 0) > 0 ? 'bg-muted/50' : 'bg-transparent'
+                            )}>
+                                {capturedPieces[player.id] && capturedPieces[player.id]!.length > 0 ? (
+                                    capturedPieces[player.id]!.map((piece, index) => (
+                                        <CapturedPiece key={index} piece={piece} />
+                                    ))
+                                ) : (
+                                    <p className="text-xs text-muted-foreground italic">No pieces captured yet.</p>
+                                )}
+                            </div>
                         </div>
-                        <div className={cn(
-                            "flex flex-wrap gap-1 p-2 rounded-md min-h-[36px]",
-                            (capturedPieces[player.id]?.length ?? 0) > 0 ? 'bg-muted/50' : 'bg-transparent'
-                        )}>
-                            {capturedPieces[player.id] && capturedPieces[player.id]!.length > 0 ? (
-                                capturedPieces[player.id]!.map((piece, index) => (
-                                    <CapturedPiece key={index} piece={piece} />
-                                ))
-                            ) : (
-                                <p className="text-xs text-muted-foreground italic">No pieces captured yet.</p>
-                            )}
-                        </div>
-                    </div>
-                ))}
+                    )
+                })}
                 </div>
             </ScrollArea>
         </CardContent>

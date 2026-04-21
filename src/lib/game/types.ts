@@ -32,6 +32,7 @@ export interface GameState {
   currentPlayerIndex: number;
   players: Player[];
   eliminatedPlayerIds: PlayerId[];
+  inCheckPlayerIds: PlayerId[];
   winner: PlayerId | null;
   lastMove: Move | null;
   enPassantTarget: { row: number; col: number } | null;
